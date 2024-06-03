@@ -128,3 +128,56 @@ func TestParseBencodeInt(t *testing.T) {
   remaining, val, err = parser.ParseBencode("i-99839e")
   assert.Equal(t, int64(-99839), val)
 }
+
+func TestParseSimpleBencodeList(t *testing.T) {
+  remaining, val, _ := parser.ParseBencode("li1ei2e3:abce")
+
+  list, isList := val.([]any)
+
+  assert.Equal(t, "", remaining)
+  assert.True(t, isList)
+  assert.Equal(t, 3, len(list))
+
+  ele0, correctType0 := list[0].(int64)
+  assert.True(t, correctType0)
+  assert.Equal(t, int64(1), ele0)
+
+  ele1, correctType1 := list[1].(int64)
+  assert.True(t, correctType1)
+  assert.Equal(t, int64(2), ele1)
+
+  ele2, correctType2 := list[2].(string)
+  assert.True(t, correctType2)
+  assert.Equal(t, "abc", ele2)
+}
+
+func TestParseComplexBencodeList(t *testing.T) {
+  remaining, val, _ := parser.ParseBencode("li1ei2e3:abcli3ei4e2:abee")
+
+  list, isList := val.([]any)
+
+  assert.Equal(t, "", remaining)
+  assert.True(t, isList)
+  assert.Equal(t, 4, len(list))
+
+  sublist, isList2 := list[3].([]any)
+  
+  assert.True(t, isList2)
+  assert.Equal(t, 3, len(sublist))
+
+  sublistEle0, isNum0 := sublist[0].(int64)
+  assert.Equal(t, int64(3), sublistEle0)
+  assert.True(t, isNum0)
+
+  sublistEle1, isNum1 := sublist[1].(int64)
+  assert.Equal(t, int64(4), sublistEle1)
+  assert.True(t, isNum1)
+
+  sublistEle2, isString2 := sublist[2].(string)
+  assert.Equal(t, "ab", sublistEle2)
+  assert.True(t, isString2)
+}
+
+func TestParseDictionary(t *testing.T) {
+
+}
