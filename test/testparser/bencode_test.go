@@ -3,7 +3,7 @@ package test
 import (
 	"fmt"
 	"testing"
-
+	"reflect"
 	"github.com/dpnam2112/bittorrent-client/parser"
 	"github.com/stretchr/testify/assert"
 )
@@ -179,5 +179,24 @@ func TestParseComplexBencodeList(t *testing.T) {
 }
 
 func TestParseDictionary(t *testing.T) {
+  expected_dicts := map[string]map[any]any{
+    "de": {},
+    "d1:a1:be": { "a": "b", },
+    "d2:abi3ee": { "ab": int64(3), },
+    "d2:abli1ei2ei3eee": { "ab": []any{ int64(1), int64(2), int64(3) } },
+    "ddedee": {},
+  }
 
+  for bencode, expected := range(expected_dicts) {
+    remaining, val, err := parser.ParseBencode(bencode)
+
+    assert.Nil(t, err)
+
+    dict, isDict := val.(map[any]any)
+
+    assert.True(t, isDict)
+    assert.IsType(t, dict, expected)
+    assert.Equal(t, remaining, "");
+    assert.True(t, reflect.DeepEqual(dict, expected))
+  }
 }
