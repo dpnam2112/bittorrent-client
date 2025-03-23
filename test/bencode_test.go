@@ -11,153 +11,154 @@ import (
 
 func TestParseBencodeString(t *testing.T) {
 	// Test a simple string: "1:a"
-	remaining, val, err := bencode.ParseBencode("1:a")
+	remaining, val, err := bencode.ParseBencode([]byte("1:a"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bs, ok := val.(*bencode.BString)
 	assert.True(t, ok, "expected *BString")
-	assert.Equal(t, "a", bs.Value)
+	assert.Equal(t, []byte("a"), bs.Value)
 
 	// Test an empty string: "0:"
-	remaining, val, err = bencode.ParseBencode("0:")
+	remaining, val, err = bencode.ParseBencode([]byte("0:"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bs, ok = val.(*bencode.BString)
 	assert.True(t, ok, "expected *BString")
-	assert.Equal(t, "", bs.Value)
+	assert.Equal(t, []byte(""), bs.Value)
 
 	// Syntax errors in the input string
-	remaining, val, err = bencode.ParseBencode("x2:abc")
+	remaining, val, err = bencode.ParseBencode([]byte("x2:abc"))
 	assert.Error(t, err)
-	assert.Equal(t, "x2:abc", remaining)
+	assert.Equal(t, []byte("x2:abc"), remaining)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("2!:abc")
+	remaining, val, err = bencode.ParseBencode([]byte("2!:abc"))
 	assert.Error(t, err)
-	assert.Equal(t, "2!:abc", remaining)
+	assert.Equal(t, []byte("2!:abc"), remaining)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("10$:a")
+	remaining, val, err = bencode.ParseBencode([]byte("10$:a"))
 	assert.Error(t, err)
-	assert.Equal(t, "10$:a", remaining)
+	assert.Equal(t, []byte("10$:a"), remaining)
 	assert.Nil(t, val)
 
 	// Test string with a colon prefix: "2::a"
-	remaining, val, err = bencode.ParseBencode("2::a")
+	remaining, val, err = bencode.ParseBencode([]byte("2::a"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bs, ok = val.(*bencode.BString)
 	assert.True(t, ok)
-	assert.Equal(t, ":a", bs.Value)
+	assert.Equal(t, []byte(":a"), bs.Value)
 
 	// Leading zeros in the length part: "02::a"
-	remaining, val, err = bencode.ParseBencode("02::a")
+	remaining, val, err = bencode.ParseBencode([]byte("02::a"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bs, ok = val.(*bencode.BString)
 	assert.True(t, ok)
-	assert.Equal(t, ":a", bs.Value)
+	assert.Equal(t, []byte(":a"), bs.Value)
 
 	// Negative length should fail.
-	remaining, val, err = bencode.ParseBencode("-1:a")
+	remaining, val, err = bencode.ParseBencode([]byte("-1:a"))
 	assert.Error(t, err)
-	assert.Equal(t, "-1:a", remaining)
+	assert.Equal(t, []byte("-1:a"), remaining)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("-2:ab")
+	remaining, val, err = bencode.ParseBencode([]byte("-2:ab"))
 	assert.Error(t, err)
-	assert.Equal(t, "-2:ab", remaining)
+	assert.Equal(t, []byte("-2:ab"), remaining)
 	assert.Nil(t, val)
 
 	// Test a long string.
-	remaining, val, err = bencode.ParseBencode("12:123456789012")
+	remaining, val, err = bencode.ParseBencode([]byte("12:123456789012"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bs, ok = val.(*bencode.BString)
 	assert.True(t, ok)
-	assert.Equal(t, "123456789012", bs.Value)
+	assert.Equal(t, []byte("123456789012"), bs.Value)
 
 	// Test a long random string.
 	s := "abcwifieeirwjrwriwruvsfjkadfjieqie83e19jr29rj2rjofjafdmqdiqdhquhdusdks><odjwiereir::sidsifq0eee}}][p"
-	remaining, val, err = bencode.ParseBencode(fmt.Sprintf("%d:%s", len(s), s))
+	encoded := fmt.Sprintf("%d:%s", len(s), s)
+	remaining, val, err = bencode.ParseBencode([]byte(encoded))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bs, ok = val.(*bencode.BString)
 	assert.True(t, ok)
-	assert.Equal(t, s, bs.Value)
+	assert.Equal(t, []byte(s), bs.Value)
 }
 
 func TestParseBencodeInt(t *testing.T) {
 	// Test a positive integer.
-	remaining, val, err := bencode.ParseBencode("i123e")
+	remaining, val, err := bencode.ParseBencode([]byte("i123e"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bi, ok := val.(*bencode.BInt)
 	assert.True(t, ok, "expected *BInt")
 	assert.Equal(t, int64(123), bi.Value)
 
 	// Test zero.
-	remaining, val, err = bencode.ParseBencode("i0e")
+	remaining, val, err = bencode.ParseBencode([]byte("i0e"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bi, ok = val.(*bencode.BInt)
 	assert.True(t, ok)
 	assert.Equal(t, int64(0), bi.Value)
 
 	// Leading zeros or invalid formatting should fail.
-	remaining, val, err = bencode.ParseBencode("i-0e")
+	remaining, val, err = bencode.ParseBencode([]byte("i-0e"))
 	assert.Error(t, err)
-	assert.Equal(t, "i-0e", remaining)
+	assert.Equal(t, []byte("i-0e"), remaining)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("i00e")
+	remaining, val, err = bencode.ParseBencode([]byte("i00e"))
 	assert.Error(t, err)
-	assert.Equal(t, "i00e", remaining)
+	assert.Equal(t, []byte("i00e"), remaining)
 	assert.Nil(t, val)
 
 	// Syntax errors.
-	remaining, val, err = bencode.ParseBencode("i122d")
+	remaining, val, err = bencode.ParseBencode([]byte("i122d"))
 	assert.Error(t, err)
-	assert.Equal(t, "i122d", remaining)
+	assert.Equal(t, []byte("i122d"), remaining)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("ie")
+	remaining, val, err = bencode.ParseBencode([]byte("ie"))
 	assert.Error(t, err)
-	assert.Equal(t, "ie", remaining)
+	assert.Equal(t, []byte("ie"), remaining)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("i+e")
-	assert.Error(t, err)
-	assert.Nil(t, val)
-
-	remaining, val, err = bencode.ParseBencode("i+0e")
+	remaining, val, err = bencode.ParseBencode([]byte("i+e"))
 	assert.Error(t, err)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("i0.e")
+	remaining, val, err = bencode.ParseBencode([]byte("i+0e"))
 	assert.Error(t, err)
 	assert.Nil(t, val)
 
-	remaining, val, err = bencode.ParseBencode("i-1.0e")
+	remaining, val, err = bencode.ParseBencode([]byte("i0.e"))
+	assert.Error(t, err)
+	assert.Nil(t, val)
+
+	remaining, val, err = bencode.ParseBencode([]byte("i-1.0e"))
 	assert.Error(t, err)
 	assert.Nil(t, val)
 
 	// Valid negative integer.
-	remaining, val, err = bencode.ParseBencode("i-12e")
+	remaining, val, err = bencode.ParseBencode([]byte("i-12e"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bi, ok = val.(*bencode.BInt)
 	assert.True(t, ok)
 	assert.Equal(t, int64(-12), bi.Value)
 
-	remaining, val, err = bencode.ParseBencode("i99839e")
+	remaining, val, err = bencode.ParseBencode([]byte("i99839e"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 	bi, ok = val.(*bencode.BInt)
 	assert.True(t, ok)
 	assert.Equal(t, int64(99839), bi.Value)
 
-	remaining, val, err = bencode.ParseBencode("i-99839e")
+	remaining, val, err = bencode.ParseBencode([]byte("i-99839e"))
 	bi, ok = val.(*bencode.BInt)
 	assert.True(t, ok)
 	assert.Equal(t, int64(-99839), bi.Value)
@@ -165,9 +166,9 @@ func TestParseBencodeInt(t *testing.T) {
 
 func TestParseSimpleBencodeList(t *testing.T) {
 	// Test a simple list: li1ei2e3:abce
-	remaining, val, err := bencode.ParseBencode("li1ei2e3:abce")
+	remaining, val, err := bencode.ParseBencode([]byte("li1ei2e3:abce"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 
 	bl, ok := val.(*bencode.BList)
 	assert.True(t, ok, "expected *BList")
@@ -186,14 +187,14 @@ func TestParseSimpleBencodeList(t *testing.T) {
 	// Validate third element (string "abc").
 	bs, ok := bl.Values[2].(*bencode.BString)
 	assert.True(t, ok)
-	assert.Equal(t, "abc", bs.Value)
+	assert.Equal(t, []byte("abc"), bs.Value)
 }
 
 func TestParseComplexBencodeList(t *testing.T) {
 	// Test a complex list: li1ei2e3:abcli3ei4e2:abee
-	remaining, val, err := bencode.ParseBencode("li1ei2e3:abcli3ei4e2:abee")
+	remaining, val, err := bencode.ParseBencode([]byte("li1ei2e3:abcli3ei4e2:abee"))
 	assert.NoError(t, err)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, []byte(""), remaining)
 
 	bl, ok := val.(*bencode.BList)
 	assert.True(t, ok)
@@ -214,7 +215,7 @@ func TestParseComplexBencodeList(t *testing.T) {
 
 	bs, ok := sublist.Values[2].(*bencode.BString)
 	assert.True(t, ok)
-	assert.Equal(t, "ab", bs.Value)
+	assert.Equal(t, []byte("ab"), bs.Value)
 }
 
 func TestParseDictionarySuccess(t *testing.T) {
@@ -225,10 +226,10 @@ func TestParseDictionarySuccess(t *testing.T) {
 		"d2:abli1ei2ei3eee": {"ab": []any{int64(1), int64(2), int64(3)}},
 	}
 
-	for bencode_str, expected := range expectedDicts {
-		remaining, val, err := bencode.ParseBencode(bencode_str)
+	for bencodeStr, expected := range expectedDicts {
+		remaining, val, err := bencode.ParseBencode([]byte(bencodeStr))
 		assert.NoError(t, err)
-		assert.Equal(t, "", remaining)
+		assert.Equal(t, []byte(""), remaining)
 
 		bd, ok := val.(*bencode.BDict)
 		assert.True(t, ok, "expected *BDict")
@@ -238,7 +239,7 @@ func TestParseDictionarySuccess(t *testing.T) {
 		for key, bval := range bd.Dict {
 			switch v := bval.(type) {
 			case *bencode.BString:
-				converted[key] = v.Value
+				converted[key] = string(v.Value)
 			case *bencode.BInt:
 				converted[key] = v.Value
 			case *bencode.BList:
@@ -246,7 +247,7 @@ func TestParseDictionarySuccess(t *testing.T) {
 				for _, elem := range v.Values {
 					switch x := elem.(type) {
 					case *bencode.BString:
-						list = append(list, x.Value)
+						list = append(list, string(x.Value))
 					case *bencode.BInt:
 						list = append(list, x.Value)
 					default:
@@ -266,15 +267,16 @@ func TestParseDictionaryFail(t *testing.T) {
 	invalidDicts := []string{
 		"di3ei4e",         // Key is not a string.
 		"d1:a1:b",         // Missing 'e' to end the dictionary.
-		"d1:a",            // Missing value for the key
-		"d1:a1:b1:c",      // Missing 'e' to end the dictionary
-		"di32e1:b1:ci3ee", // Contains a non-string key
-		"d1:a1:bd",        // Nested dictionary without proper end
+		"d1:a",            // Missing value for the key.
+		"d1:a1:b1:c",      // Missing 'e' to end the dictionary.
+		"di32e1:b1:ci3ee", // Contains a non-string key.
+		"d1:a1:bd",        // Nested dictionary without proper end.
 	}
 
 	for _, bencodeStr := range invalidDicts {
-		_, val, err := bencode.ParseBencode(bencodeStr)
+		_, val, err := bencode.ParseBencode([]byte(bencodeStr))
 		assert.Error(t, err)
 		assert.Nil(t, val)
 	}
 }
+

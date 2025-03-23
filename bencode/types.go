@@ -24,9 +24,9 @@ func (b *BInt) GetType() BencodeType {
 	return BencodeInt
 }
 
-// BString represents a bencoded string.
+// BString represents a bencoded string (raw bytes).
 type BString struct {
-	Value string
+	Value []byte
 }
 
 func (b *BString) GetType() BencodeType {
@@ -50,3 +50,4 @@ type BDict struct {
 func (b *BDict) GetType() BencodeType {
 	return BencodeDict
 }
+

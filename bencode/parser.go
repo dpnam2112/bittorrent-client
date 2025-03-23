@@ -1,14 +1,15 @@
 package bencode
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
 )
 
-// ParseBencode is the entry point for parsing a bencoded string.
-// It returns the remaining string, the parsed bencoded value (as a BValue), and an error if one occurs.
-func ParseBencode(data string) (string, BValue, error) {
+// ParseBencode is the entry point for parsing a bencoded byte slice.
+// It returns the remaining bytes, the parsed bencoded value (as a BValue), and an error if one occurs.
+func ParseBencode(data []byte) ([]byte, BValue, error) {
 	if len(data) == 0 {
 		return data, nil, errors.New("empty input")
 	}
@@ -29,7 +30,7 @@ func ParseBencode(data string) (string, BValue, error) {
 }
 
 // parseInt parses a bencoded integer of the form i<int>e.
-func parseInt(data string) (string, *BInt, error) {
+func parseInt(data []byte) ([]byte, *BInt, error) {
 	if len(data) < 3 || data[0] != 'i' {
 		return data, nil, errors.New("bad payload: invalid integer encoding")
 	}
@@ -60,7 +61,7 @@ func parseInt(data string) (string, *BInt, error) {
 		return data, nil, fmt.Errorf("bad payload: expected 'e' at end of integer, at '%s...'", data[start:i])
 	}
 
-	val, err := strconv.ParseInt(data[start:i], 10, 64)
+	val, err := strconv.ParseInt(string(data[start:i]), 10, 64)
 	if err != nil {
 		return data, nil, fmt.Errorf("bad payload: failed to parse integer at '%s...'", data[start:i])
 	}
@@ -69,31 +70,29 @@ func parseInt(data string) (string, *BInt, error) {
 }
 
 // parseString parses a bencoded string of the form <length>:<string>.
-func parseString(data string) (string, *BString, error) {
-	i := 0
-	for i < len(data) && data[i] != ':' {
-		i++
-	}
-	if i >= len(data) {
+// Note: The string part is returned as raw bytes.
+func parseString(data []byte) ([]byte, *BString, error) {
+	colonIdx := bytes.IndexByte(data, ':')
+	if colonIdx < 0 {
 		return data, nil, errors.New("bad payload: missing ':' in string encoding")
 	}
 
-	length, err := strconv.ParseInt(data[:i], 10, 32)
+	length, err := strconv.ParseInt(string(data[:colonIdx]), 10, 32)
 	if err != nil {
 		return data, nil, errors.New("bad payload: failed to parse string length")
 	}
 
-	i++ // consume ':'
-	if i+int(length) > len(data) {
+	start := colonIdx + 1
+	if start+int(length) > len(data) {
 		return data, nil, errors.New("bad payload: string length exceeds available data")
 	}
 
-	str := data[i : i+int(length)]
-	return data[i+int(length):], &BString{Value: str}, nil
+	str := data[start : start+int(length)]
+	return data[start+int(length):], &BString{Value: str}, nil
 }
 
 // parseList parses a bencoded list of the form l<bencoded values>e.
-func parseList(data string) (string, *BList, error) {
+func parseList(data []byte) ([]byte, *BList, error) {
 	if len(data) < 2 || data[0] != 'l' {
 		return data, nil, errors.New("bad payload: invalid list encoding")
 	}
@@ -121,13 +120,12 @@ func parseList(data string) (string, *BList, error) {
 }
 
 // parseDict parses a bencoded dictionary of the form d<bencoded pairs>e.
-func parseDict(data string) (string, *BDict, error) {
+func parseDict(data []byte) ([]byte, *BDict, error) {
 	if len(data) < 2 || data[0] != 'd' {
 		return data, nil, errors.New("bad payload: invalid dictionary encoding")
 	}
 
 	dict := make(map[string]BValue)
-	// Consume 'd'
 	remaining := data[1:]
 
 	for len(remaining) != 0 && remaining[0] != 'e' {
@@ -142,7 +140,8 @@ func parseDict(data string) (string, *BDict, error) {
 			return data, nil, err
 		}
 
-		keyStr := keyVal.Value
+		// Use the string value of the key bytes.
+		keyStr := string(keyVal.Value)
 
 		remaining, val, err = ParseBencode(remaining)
 		if err != nil {
@@ -158,3 +157,4 @@ func parseDict(data string) (string, *BDict, error) {
 
 	return remaining[1:], &BDict{Dict: dict}, nil
 }
+
