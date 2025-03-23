@@ -61,4 +61,3 @@ func TestParseInvalidTorrent(t *testing.T) {
 	_, err := ParseTorrent(reader)
 	assert.Error(t, err)
 }
-

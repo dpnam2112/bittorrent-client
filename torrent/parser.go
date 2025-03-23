@@ -121,4 +121,3 @@ func parseInfoDict(infoDict *bencode.BDict) InfoDict {
 
 	return info
 }
-
