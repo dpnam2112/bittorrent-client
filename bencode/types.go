@@ -50,4 +50,3 @@ type BDict struct {
 func (b *BDict) GetType() BencodeType {
 	return BencodeDict
 }
-

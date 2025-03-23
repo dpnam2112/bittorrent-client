@@ -157,4 +157,3 @@ func parseDict(data []byte) ([]byte, *BDict, error) {
 
 	return remaining[1:], &BDict{Dict: dict}, nil
 }
-

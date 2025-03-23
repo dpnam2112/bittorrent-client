@@ -279,4 +279,3 @@ func TestParseDictionaryFail(t *testing.T) {
 		assert.Nil(t, val)
 	}
 }
-
