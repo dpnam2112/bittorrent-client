@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestParseBencodeString(t *testing.T) {
 	// Test a simple string: "1:a"
 	remaining, val, err := bencode.ParseBencode("1:a")
@@ -265,12 +264,12 @@ func TestParseDictionarySuccess(t *testing.T) {
 
 func TestParseDictionaryFail(t *testing.T) {
 	invalidDicts := []string{
-		"di3ei4e",  // Key is not a string.
-		"d1:a1:b", // Missing 'e' to end the dictionary.
-		"d1:a",   // Missing value for the key
-		"d1:a1:b1:c",  // Missing 'e' to end the dictionary
+		"di3ei4e",         // Key is not a string.
+		"d1:a1:b",         // Missing 'e' to end the dictionary.
+		"d1:a",            // Missing value for the key
+		"d1:a1:b1:c",      // Missing 'e' to end the dictionary
 		"di32e1:b1:ci3ee", // Contains a non-string key
-		"d1:a1:bd",    // Nested dictionary without proper end
+		"d1:a1:bd",        // Nested dictionary without proper end
 	}
 
 	for _, bencodeStr := range invalidDicts {

@@ -132,9 +132,9 @@ func parseDict(data string) (string, *BDict, error) {
 
 	for len(remaining) != 0 && remaining[0] != 'e' {
 		var (
-			keyVal *BString;
-			val BValue;
-			err error;
+			keyVal *BString
+			val    BValue
+			err    error
 		)
 
 		remaining, keyVal, err = parseString(remaining)
@@ -158,4 +158,3 @@ func parseDict(data string) (string, *BDict, error) {
 
 	return remaining[1:], &BDict{Dict: dict}, nil
 }
-
