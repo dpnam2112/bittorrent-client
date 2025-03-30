@@ -1,5 +1,10 @@
 package torrent
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Torrent represents the parsed content of a .torrent file.
 type Torrent struct {
 	Announce     string     // Primary tracker URL
@@ -20,4 +25,41 @@ type InfoDict struct {
 type FileEntry struct {
 	Length int64    // Length of the file in bytes
 	Path   []string // Path components (for multi-file torrents)
+}
+
+func (t Torrent) String() string {
+	var sb strings.Builder
+
+	sb.WriteString("=== Torrent Info ===\n")
+	sb.WriteString(fmt.Sprintf("Announce: %s\n", t.Announce))
+
+	if len(t.AnnounceList) > 0 {
+		sb.WriteString("Announce List:\n")
+		for _, tier := range t.AnnounceList {
+			sb.WriteString("  - ")
+			sb.WriteString(strings.Join(tier, ", "))
+			sb.WriteByte('\n')
+		}
+	}
+
+	info := t.Info
+	sb.WriteString(fmt.Sprintf("Name: %s\n", info.Name))
+	sb.WriteString(fmt.Sprintf("Piece Length: %d\n", info.PieceLength))
+
+	// Safely print info about raw pieces
+	numPieces := len(info.Pieces) / 20
+	sb.WriteString(fmt.Sprintf("Pieces: %d pieces (%d bytes total)\n", numPieces, len(info.Pieces)))
+
+	// File info
+	if len(info.Files) > 0 {
+		sb.WriteString("Files:\n")
+		for _, f := range info.Files {
+			sb.WriteString(fmt.Sprintf("  - %s (%d bytes)\n", strings.Join(f.Path, "/"), f.Length))
+		}
+	} else {
+		// Single-file mode
+		sb.WriteString(fmt.Sprintf("Single File Length: %d bytes\n", info.Length))
+	}
+
+	return sb.String()
 }

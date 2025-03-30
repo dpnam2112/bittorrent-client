@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/dpnam2112/bittorrent-client/bencode"
 )
@@ -20,14 +21,16 @@ func ParseTorrent(reader io.Reader) (*Torrent, error) {
 	remaining, value, err := bencode.ParseBencode(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse bencoded data: %w", err)
+
 	}
-	if len(remaining) != 0 {
-		return nil, errors.New("unexpected extra data after parsing")
+	if len(remaining) == 0 {
+		slog.Warn("unexpected extra data after parsing")
 	}
 
 	// Check if the value is a dictionary.
 	dict, ok := value.(*bencode.BDict)
 	if !ok {
+		slog.Error("torrent data is not a dictionary")
 		return nil, errors.New("torrent data is not a dictionary")
 	}
 
