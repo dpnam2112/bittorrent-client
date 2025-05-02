@@ -6,6 +6,8 @@
 
 - Experiment with public trackers by calling UDP requests (`scripts/experiment`)
 
+- Initialize code for implementing client interface to interact with tracker via UDP (branch `trackerclient`)
+
 ## 2025/04/27
 
 - Dig deeper into the concept tracker of Bittorrent.
