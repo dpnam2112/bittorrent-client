@@ -1,5 +1,10 @@
 # Dev logs
 
+## 2025/05/02
+
+- Read the tracker UDP specification [BEP 0015](https://www.bittorrent.org/beps/bep_0015.html)
+
+- Experiment with public trackers by calling UDP requests (`scripts/experiment`)
 
 ## 2025/04/27
 
