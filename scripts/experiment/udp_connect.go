@@ -44,7 +44,7 @@ import (
 
 const (
 	TRACKER_UDP_PROTOCOL_ID uint64 = 0x41727101980 // constant to identify the protocol to be used, i.e, UDP in this case)
-	TRACKER_ACTION_CONNECT uint32 = 0x0
+	TRACKER_ACTION_CONNECT  uint32 = 0x0
 	TRACKER_ACTION_ANNOUNCE uint32 = 0x1
 )
 
@@ -81,18 +81,18 @@ func main() {
 	// 12      32-bit integer  transaction_id
 	// 16
 	req := make([]byte, 16)
-    binary.BigEndian.PutUint64(req[0:8], TRACKER_UDP_PROTOCOL_ID)
-    binary.BigEndian.PutUint32(req[8:12], TRACKER_ACTION_CONNECT)
-    binary.BigEndian.PutUint32(req[12:16], txID)
-	
+	binary.BigEndian.PutUint64(req[0:8], TRACKER_UDP_PROTOCOL_ID)
+	binary.BigEndian.PutUint32(req[8:12], TRACKER_ACTION_CONNECT)
+	binary.BigEndian.PutUint32(req[12:16], txID)
+
 	_, err = conn.Write(req)
 	if err != nil {
 		fmt.Println("Failed to send data over the UDP connection:", err)
 		return
 	}
 
-    // Set read timeout
-    conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	// Set read timeout
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 	// Read the response
 	// Response format
