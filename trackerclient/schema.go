@@ -2,14 +2,17 @@ package trackerclient
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
 )
+
+type TrackerAction int32
 
 // Tracker action is a 32-bit unsigned integer representing actions that the downloader wants to
 // make when interacting with a tracker.
 const (
-	TrackerActionConnect  uint32 = 0x01
-	TrackerActionAnnounce uint32 = 0x00
+	TrackerActionConnect  TrackerAction = 0x01
+	TrackerActionAnnounce TrackerAction = 0x00
 )
 
 type AnnounceEvent uint32
@@ -77,7 +80,7 @@ type TrackerUDPErrorResponse struct {
 // 92      32-bit integer  num_want        -1 // default
 // 96      16-bit integer  port
 // 98
-func (req TrackerUDPAnnounceRequest) Serialize() []byte {
+func (req TrackerUDPAnnounceRequest) Marshal() []byte {
 	serializedReq := make([]byte, UDPAnnounceRequestSize)
 
 	binary.BigEndian.PutUint64(serializedReq[0:8], uint64(req.ConnectionID))
@@ -104,6 +107,49 @@ func (req TrackerUDPAnnounceRequest) Serialize() []byte {
 	return serializedReq
 }
 
-func (req TrackerUDPAnnounceRequest) GetActionCode() int32 {
+// Response format:
+// Offset      Size            Name            Value
+// 0           32-bit integer  action          1 // announce
+// 4           32-bit integer  transaction_id
+// 8           32-bit integer  interval
+// 12          32-bit integer  leechers
+// 16          32-bit integer  seeders
+// 20 + 6 * n  32-bit integer  IP address
+// 24 + 6 * n  16-bit integer  TCP port
+// 20 + 6 * N
+func UnmarshalTrackerUDPAnnounceResponse(rawResponse []byte) (*TrackerUDPAnnounceResponse, error) {
+	// Validate the response size
+	responseSize := len(rawResponse)
+	if (responseSize - 20) % 6 != 0 {
+		return nil, errors.New("Announce response's size is invalid. Currently only IPv4 is supported.")
+	}
+
+	action := binary.BigEndian.Uint32(rawResponse[:4])
+	if TrackerAction(action) != TrackerActionAnnounce {
+		return nil, errors.New("Value of the field 'action' in the response is invalid.")
+	}
+
+	// Parse addreses of peers
+	peerCount := (responseSize - 20) / 6
+	peers := []PeerAddr{}
+	for i := 0; i < peerCount; i++ {
+		ipOffset := 20 + 6 * i
+		portOffset := 24 + 6 * i
+		newPeer := PeerAddr{
+			IP: net.IP(rawResponse[ipOffset:ipOffset + 4]),
+			Port: binary.BigEndian.Uint16(rawResponse[portOffset:portOffset + 2]),
+		}
+		peers = append(peers, newPeer)
+	}
+
+	return &TrackerUDPAnnounceResponse{
+		TxnID: int32(binary.BigEndian.Uint32(rawResponse[4:8])),
+		Interval: int32(binary.BigEndian.Uint32(rawResponse[8:12])),
+		Leechers: int32(binary.BigEndian.Uint32(rawResponse[12:16])),
+		Seeders: int32(binary.BigEndian.Uint32(rawResponse[16:20])),
+	}, nil
+}
+
+func (req TrackerUDPAnnounceRequest) GetActionCode() TrackerAction {
 	return 0x1
 }
