@@ -155,7 +155,7 @@ func parseDict(data []byte) ([]byte, *BDict, error) {
 		return data, nil, errors.New("bad payload: dictionary not terminated with 'e'")
 	}
 
-	parsedLength := len(data) - len(remaining)
+	parsedLength := len(data) - (len(remaining) - 1) // exclude 'e' from the remaining
 	rawBencode := data[:parsedLength]
 
 	return remaining[1:], &BDict{Dict: dict, raw: rawBencode}, nil
