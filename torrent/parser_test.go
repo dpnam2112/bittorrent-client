@@ -2,6 +2,9 @@ package torrent
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,6 +21,13 @@ func TestParseSingleFileTorrent(t *testing.T) {
 	assert.Equal(t, "testfile.txt", torrent.Info().Name())
 	assert.Equal(t, int64(524288), torrent.Info().PieceLength())
 	assert.Equal(t, 20, len(torrent.Info().Pieces()))
+
+	fmt.Println(string(torrent.Info().rawBencode))
+
+	infoDictBencode := "d4:name12:testfile.txt12:piece lengthi524288e6:pieces20:aaaaaaaaaaaaaaaaaaaae"
+
+	assert.True(t, reflect.DeepEqual(torrent.Info().rawBencode, []byte(infoDictBencode)))
+	assert.True(t, reflect.DeepEqual(sha1.Sum([]byte(infoDictBencode)), torrent.Info().Hash()))
 }
 
 func TestParseMultiFileTorrent(t *testing.T) {
@@ -51,4 +61,3 @@ func TestParseInvalidTorrent(t *testing.T) {
 	_, err := ParseTorrent(reader)
 	assert.Error(t, err)
 }
-
