@@ -15,6 +15,8 @@ type TrackerAction int32
 const (
 	TrackerActionConnect  TrackerAction = 0x00
 	TrackerActionAnnounce TrackerAction = 0x01
+	TrackerActionScrape	  TrackerAction = 0x02
+	TrackerActionError	  TrackerAction = 0x03
 )
 
 type AnnounceEvent uint32
@@ -35,6 +37,10 @@ const (
 type PeerAddr struct {
 	IP   net.IP
 	Port uint16
+}
+
+type TrackerUDPResponse interface {
+	Action() TrackerAction
 }
 
 type TrackerUDPAnnounceRequest struct {
@@ -67,7 +73,7 @@ type TrackerUDPAnnounceResponse struct {
 
 type TrackerUDPErrorResponse struct {
 	TxnID   int32
-	message string
+	Message string
 }
 
 // Serialize request to bytes
@@ -93,7 +99,7 @@ func (req TrackerUDPAnnounceRequest) Marshal() []byte {
 	serializedReq := make([]byte, UDPAnnounceRequestSize)
 
 	binary.BigEndian.PutUint64(serializedReq[0:8], uint64(req.ConnectionID))
-	binary.BigEndian.PutUint32(serializedReq[8:12], uint32(req.GetActionCode()))
+	binary.BigEndian.PutUint32(serializedReq[8:12], uint32(req.Action()))
 	binary.BigEndian.PutUint32(serializedReq[12:16], uint32(req.TxnID))
 	copy(serializedReq[16:36], req.InfoHash[:])
 	copy(serializedReq[36:56], req.PeerID[:])
@@ -160,7 +166,7 @@ func UnmarshalTrackerUDPAnnounceResponse(rawResponse []byte) (*TrackerUDPAnnounc
 	}, nil
 }
 
-func (req TrackerUDPAnnounceRequest) GetActionCode() TrackerAction {
+func (req TrackerUDPAnnounceRequest) Action() TrackerAction {
 	return TrackerActionAnnounce
 }
 
@@ -189,12 +195,12 @@ func CreateTrackerUDPConnectRequest(genTxnID bool) *TrackerUDPConnectRequest {
 func (req TrackerUDPConnectRequest) Marshal() []byte {
 	rawRequest := make([]byte, UDPConnectRequestSize)
 	binary.BigEndian.PutUint64(rawRequest[0:8], 0x41727101980)
-	binary.BigEndian.PutUint32(rawRequest[8:12], uint32(req.GetActionCode()))
+	binary.BigEndian.PutUint32(rawRequest[8:12], uint32(req.Action()))
 	binary.BigEndian.PutUint32(rawRequest[12:], uint32(req.TxnID))
 	return rawRequest
 }
 
-func (req TrackerUDPConnectRequest) GetActionCode() TrackerAction {
+func (req TrackerUDPConnectRequest) Action() TrackerAction {
 	return TrackerActionConnect
 }
 
@@ -203,7 +209,7 @@ type TrackerUDPConnectResponse struct {
 	ConnectionID int64
 }
 
-func (req TrackerUDPConnectResponse) GetActionCode() TrackerAction {
+func (req TrackerUDPConnectResponse) Action() TrackerAction {
 	return TrackerActionConnect
 }
 
@@ -226,4 +232,35 @@ func UnmarshalTrackerUDPConnectResponse(rawResponse []byte) (*TrackerUDPConnectR
 		TxnID: txnID,
 		ConnectionID: connID,
 	}, nil
+}
+
+func (r TrackerUDPAnnounceResponse) Action() TrackerAction {
+	return TrackerActionAnnounce
+}
+
+// Offset  Size            Name            Value
+// 0       32-bit integer  action          3 // error
+// 4       32-bit integer  transaction_id
+// 8       string  message
+func UnmarshalTrackerUDPErrorResponse(rawResponse []byte) (*TrackerUDPErrorResponse, error) {
+	action := binary.BigEndian.Uint32(rawResponse[:4])
+
+	if TrackerAction(action) != TrackerActionError {
+		return nil, fmt.Errorf("Invalid value of field 'action', expect '%d', but got: '%d'.", TrackerActionConnect, action)
+	}
+
+	txnID := int32(binary.BigEndian.Uint32(rawResponse[4:8]))
+
+	return &TrackerUDPErrorResponse{
+		TxnID: txnID,
+		Message: string(rawResponse[8:]),
+	}, nil
+}
+
+func (r TrackerUDPErrorResponse) Action() TrackerAction {
+	return TrackerActionError
+}
+
+func getActionFromRawResp(resp []byte) TrackerAction {
+	return TrackerAction(binary.BigEndian.Uint32(resp[:4]))
 }
