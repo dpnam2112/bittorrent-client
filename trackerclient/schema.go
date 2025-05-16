@@ -40,8 +40,8 @@ type PeerAddr struct {
 type TrackerUDPAnnounceRequest struct {
 	ConnectionID int64
 	TxnID        int32
-	InfoHash     []byte
-	PeerID       int32
+	InfoHash     [20]byte
+	PeerID       [20]byte
 	Downloaded   int32
 	Uploaded     int32
 	Left         int32
@@ -95,8 +95,8 @@ func (req TrackerUDPAnnounceRequest) Marshal() []byte {
 	binary.BigEndian.PutUint64(serializedReq[0:8], uint64(req.ConnectionID))
 	binary.BigEndian.PutUint32(serializedReq[8:12], uint32(req.GetActionCode()))
 	binary.BigEndian.PutUint32(serializedReq[12:16], uint32(req.TxnID))
-	copy(serializedReq[16:36], req.InfoHash)
-	binary.BigEndian.PutUint32(serializedReq[36:56], uint32(req.PeerID))
+	copy(serializedReq[16:36], req.InfoHash[:])
+	copy(serializedReq[36:56], req.PeerID[:])
 	binary.BigEndian.PutUint64(serializedReq[56:64], uint64(req.Downloaded))
 	binary.BigEndian.PutUint64(serializedReq[64:72], uint64(req.Left))
 	binary.BigEndian.PutUint64(serializedReq[72:80], uint64(req.Uploaded))
@@ -156,6 +156,7 @@ func UnmarshalTrackerUDPAnnounceResponse(rawResponse []byte) (*TrackerUDPAnnounc
 		Interval: int32(binary.BigEndian.Uint32(rawResponse[8:12])),
 		Leechers: int32(binary.BigEndian.Uint32(rawResponse[12:16])),
 		Seeders: int32(binary.BigEndian.Uint32(rawResponse[16:20])),
+		PeerAddresses: peers,
 	}, nil
 }
 
@@ -217,9 +218,9 @@ func UnmarshalTrackerUDPConnectResponse(rawResponse []byte) (*TrackerUDPConnectR
 	if TrackerAction(action) != TrackerActionConnect {
 		return nil, fmt.Errorf("Invalid value of field 'action', expect '%d', but got: '%d'.", TrackerActionConnect, action)
 	}
-	
+
 	txnID := int32(binary.BigEndian.Uint32(rawResponse[4:8]))
-	connID := int64(binary.BigEndian.Uint32(rawResponse[8:16]))
+	connID := int64(binary.BigEndian.Uint64(rawResponse[8:16]))
 
 	return &TrackerUDPConnectResponse{
 		TxnID: txnID,
