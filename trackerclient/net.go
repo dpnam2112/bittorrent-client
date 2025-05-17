@@ -105,7 +105,18 @@ func (client *TrackerUDPClient) SendAnnounceRequest(
 		return nil, fmt.Errorf("Failed to read UDP announce response from %s: %w", raddr.String(), err)
 	}
 
-	client.Logger.Debug("Received announce response", "response_size", n, "raw_payload", fmt.Sprintf("% x", responseBuf[:n]))
+	client.Logger.Debug("Received response", "response_size", n, "raw_payload", fmt.Sprintf("% x", responseBuf[:n]))
+	action := getActionFromRawResp(responseBuf[:n])
+
+	if action == TrackerActionError {
+		errResp, err := UnmarshalTrackerUDPErrorResponse(responseBuf[:n])
+		if err != nil {
+			return nil, fmt.Errorf("Failed to read UDP error response from %s: %w", raddr.String(), err)
+		}
+
+		return nil, fmt.Errorf("Error response from %s: %s", raddr.String(), errResp.Message)
+	}
+
 	announceResp, err := UnmarshalTrackerUDPAnnounceResponse(responseBuf[:n])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read UDP announce response from %s: %w", raddr.String(), err)
