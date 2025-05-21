@@ -50,7 +50,9 @@ func main() {
 	peerID := [20]byte{}
 	copy(peerID[:], []byte(peerIDStr))
     
-	conn, err := peerwire.InitiatePeerWireConnection(addrStr, peerID, "", infohash, *slog.Default())
+	conn, err := peerwire.CreatePeerWireConnection(addrStr, *slog.Default())
+	conn.Handshake(peerID, "", infohash)
+
 	if err != nil {
 		panic(err)
 	}

@@ -14,6 +14,7 @@ import (
 type PeerWireConnection interface {
 	SendPeerMessages(messages []PeerMessage) error
 	ReadPeerMessages(reader io.Reader, n int) ([]PeerMessage, error)
+	Handshake(peerID [20]byte, protocolName string, infoHash [20]byte) (HandshakeMessage, error)
 	Close() error
 }
 
@@ -23,22 +24,34 @@ type peerWireConnection struct {
 	conn net.Conn
 }
 
-func InitiatePeerWireConnection(
+func CreatePeerWireConnection(
 	rAddr string,
-	peerID [20]byte,
-	protocolName string,
-	infoHash [20]byte,
 	logger slog.Logger,
 ) (PeerWireConnection, error) {
-	if len(peerID) != 20 {
-		return nil, fmt.Errorf("peerID's length must be exactly 20.")
-	}
-
 	conn, err := net.DialTimeout("tcp", rAddr, 5 * time.Second)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error while initiating peer wire connection: %w", err)
 	}
+
+	c := peerWireConnection{
+		logger: logger,
+		conn: conn,
+	}
+
+	return &c, nil
+}
+
+func (c *peerWireConnection) Handshake(
+	peerID [20]byte,
+	protocolName string,
+	infoHash [20]byte,
+) (HandshakeMessage, error) {
+	if len(peerID) != 20 {
+		return nil, fmt.Errorf("peerID's length must be exactly 20.")
+	}
+
+	rAddr := c.conn.RemoteAddr().String()
 
 	// handshaking
 	handshakeMsg, err := createHandshakeMessage(protocolName, infoHash, peerID)
@@ -46,19 +59,19 @@ func InitiatePeerWireConnection(
 		return nil, fmt.Errorf("Error while initiating peer wire connection: %w", err)
 	}
 
-	n, err := conn.Write(handshakeMsg)
+	n, err := c.conn.Write(handshakeMsg)
 	if err != nil {
 		return nil, fmt.Errorf("Error while initiating peer wire connection: %w", err)
 	}
-	logger.Debug("Sent handshake message", "remote_addr", rAddr, "raw_msg", fmt.Sprintf("% x", handshakeMsg), "bytes_sent_count", n)
+	c.logger.Debug("Sent handshake message", "remote_addr", rAddr, "raw_msg", fmt.Sprintf("% x", handshakeMsg), "bytes_sent_count", n)
 
 
 	buf := make([]byte, 1024)
-	n, err = conn.Read(buf)
+	n, err = c.conn.Read(buf)
 	if err != nil {
 		return nil, fmt.Errorf("Error while initiating peer wire connection: %w", err)
 	}
-	logger.Debug("Receive messages", "remote_addr", rAddr, "raw_msg", fmt.Sprintf("% x", buf[:n]))
+	c.logger.Debug("Receive messages", "remote_addr", rAddr, "raw_msg", fmt.Sprintf("% x", buf[:n]))
 
 	recvHandshakeMsg, err := readHandshakeMessage(buf[:n])
 	if err != nil {
@@ -78,15 +91,9 @@ func InitiatePeerWireConnection(
 	if !reflect.DeepEqual(recvHandshakeMsg.Protocol(), handshakeMsg.Protocol()) {
 		return nil, fmt.Errorf("Info hash field of received handshake and the sent handshake don't match.")
 	}
-	logger.Debug("Handshake message", "remote_addr", rAddr, "raw_msg", fmt.Sprintf("% x", recvHandshakeMsg))
+	c.logger.Debug("Handshake message", "remote_addr", rAddr, "raw_msg", fmt.Sprintf("% x", recvHandshakeMsg))
 
-	c := peerWireConnection{
-		logger: logger,
-		conn: conn,
-		lpeerID: peerID,
-	}
-
-	return &c, nil
+	return recvHandshakeMsg, nil
 }
 
 // SendMessages sends a list of messages to the peer over a connection-oriented protocol.

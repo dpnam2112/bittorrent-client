@@ -5,6 +5,12 @@ import (
 	"fmt"
 )
 
+type HandshakeMessage interface {
+	Protocol() string
+	InfoHash() [20]byte
+	PeerID() [20]byte
+}
+
 // Handshake message format (in order):
 //
 // Field        | Size (bytes) | Description
