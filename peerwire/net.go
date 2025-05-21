@@ -1,4 +1,4 @@
-package peerwireprotocol
+package peerwire
 
 import (
 	"bufio"

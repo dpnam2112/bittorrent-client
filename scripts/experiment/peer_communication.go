@@ -18,7 +18,7 @@ import (
 	"os"
 
 	"github.com/dpnam2112/bittorrent-client/torrent"
-	"github.com/dpnam2112/bittorrent-client/peerwireprotocol"
+	"github.com/dpnam2112/bittorrent-client/peerwire"
 )
 
 func main() {
@@ -50,7 +50,7 @@ func main() {
 	peerID := [20]byte{}
 	copy(peerID[:], []byte(peerIDStr))
     
-	conn, err := peerwireprotocol.InitiatePeerWireConnection(addrStr, peerID, "", infohash, *slog.Default())
+	conn, err := peerwire.InitiatePeerWireConnection(addrStr, peerID, "", infohash, *slog.Default())
 	if err != nil {
 		panic(err)
 	}
