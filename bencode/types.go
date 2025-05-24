@@ -51,7 +51,7 @@ func (b *BList) GetType() BencodeType {
 // BDict represents a bencoded dictionary.
 type BDict struct {
 	Dict map[string]BValue
-	raw []byte
+	raw  []byte
 }
 
 // GetRaw returns raw bencode representation of the dictionary.

@@ -33,7 +33,7 @@ type handshakeMessage []byte
 
 func (msg handshakeMessage) Protocol() string {
 	pStrLen := msg[0]
-	return string(msg[1:1 + pStrLen])
+	return string(msg[1 : 1+pStrLen])
 }
 
 func (msg handshakeMessage) Length() uint32 {
@@ -42,7 +42,7 @@ func (msg handshakeMessage) Length() uint32 {
 }
 
 // Create peer-wire protocol handshake message
-func createHandshakeMessage(protocolName string, infohash, peerID [20]byte,) (handshakeMessage, error) {
+func createHandshakeMessage(protocolName string, infohash, peerID [20]byte) (handshakeMessage, error) {
 	if protocolName == "" {
 		protocolName = "BitTorrent protocol"
 	}
@@ -54,9 +54,9 @@ func createHandshakeMessage(protocolName string, infohash, peerID [20]byte,) (ha
 	size := 1 + len(protocolName) + 8 + 20 + 20
 	msg := make([]byte, size)
 	msg[0] = uint8(len(protocolName))
-	copy(msg[1:1 + len(protocolName)], []byte(protocolName))
-	copy(msg[1 + len(protocolName) + 8:1 + len(protocolName) + 28], infohash[:])
-	copy(msg[1 + len(protocolName) + 28:1 + len(protocolName) + 48], peerID[:])
+	copy(msg[1:1+len(protocolName)], []byte(protocolName))
+	copy(msg[1+len(protocolName)+8:1+len(protocolName)+28], infohash[:])
+	copy(msg[1+len(protocolName)+28:1+len(protocolName)+48], peerID[:])
 
 	return msg, nil
 }
@@ -74,7 +74,7 @@ func readHandshakeMessage(r *bufio.Reader) (handshakeMessage, error) {
 	size := 1 + int(pstrLen) + 48
 	msg := make([]byte, size)
 	msg[0] = pstrLen
-	io.ReadFull(r, msg[1:1 + pstrLen + 48])
+	io.ReadFull(r, msg[1:1+pstrLen+48])
 
 	return handshakeMessage(msg), nil
 }
@@ -82,17 +82,16 @@ func readHandshakeMessage(r *bufio.Reader) (handshakeMessage, error) {
 func (msg handshakeMessage) InfoHash() [20]byte {
 	infohashOffset := 1 + msg[0] + 8
 	infoHash := [20]byte{}
-	copy(infoHash[:], msg[infohashOffset:infohashOffset + 20])
+	copy(infoHash[:], msg[infohashOffset:infohashOffset+20])
 	return infoHash
 }
 
 func (msg handshakeMessage) PeerID() [20]byte {
 	peerIDOffset := 1 + msg[0] + 8 + 20
 	peerID := [20]byte{}
-	copy(peerID[:], msg[peerIDOffset:peerIDOffset + 20])
+	copy(peerID[:], msg[peerIDOffset:peerIDOffset+20])
 	return peerID
 }
-
 
 type PeerMsgType uint8
 
@@ -107,7 +106,7 @@ const (
 	TypePiece         PeerMsgType = 7
 	TypeCancel        PeerMsgType = 8
 	TypePort          PeerMsgType = 9
-	TypeHaveNone		  PeerMsgType = 0xf
+	TypeHaveNone      PeerMsgType = 0xf
 	// KeepAlive is a special case — it has no ID and length is 0
 	TypeKeepAlive PeerMsgType = 255 // Reserved for internal handling
 )
@@ -143,12 +142,11 @@ func (t PeerMsgType) String() string {
 	}
 }
 
-
 // Peer wire protocol message format:
 //
 // Each message (after the handshake) is length-prefixed and consists of:
 //
-//   [ length_prefix (4 bytes) ][ message_id (1 byte) ][ payload (variable) ]
+//	[ length_prefix (4 bytes) ][ message_id (1 byte) ][ payload (variable) ]
 //
 // - length_prefix: 4-byte big-endian uint32 indicating the length of message_id + payload.
 // - message_id: 1 byte indicating the message type (not present if length == 0).
@@ -177,7 +175,7 @@ func readPeerMessage(r *bufio.Reader) (PeerMessage, error) {
 	bodyLen := binary.BigEndian.Uint32(prefLenBytes)
 
 	// 'unmarshal' data to a message instance
-	msg := make([]byte, 4 + bodyLen) 
+	msg := make([]byte, 4+bodyLen)
 	copy(msg[:4], prefLenBytes)
 	_, err = io.ReadFull(r, msg[4:])
 
@@ -204,7 +202,7 @@ func (msg peerMessage) Length() uint32 {
 }
 
 func (msg peerMessage) Payload() MessagePayload {
-	return MessagePayload(msg[5:4 + msg.Length()])
+	return MessagePayload(msg[5 : 4+msg.Length()])
 }
 
 func AsPeerMessage(raw []byte) (PeerMessage, error) {
@@ -213,7 +211,7 @@ func AsPeerMessage(raw []byte) (PeerMessage, error) {
 	}
 
 	msgLength := binary.BigEndian.Uint32(raw[:4])
-	return peerMessage(raw[:4 + msgLength]), nil
+	return peerMessage(raw[:4+msgLength]), nil
 }
 
 type HaveMessagePayload MessagePayload
@@ -241,7 +239,7 @@ func createPeerMessage(msgType PeerMsgType, payload MessagePayload) PeerMessage 
 
 	if payload != nil {
 		payloadLen = len(payload)
-		raw := make([]byte, 5 + payloadLen)
+		raw := make([]byte, 5+payloadLen)
 		lenFieldValue := 1 + len(payload)
 		binary.BigEndian.PutUint32(raw[:4], uint32(lenFieldValue))
 		raw[4] = byte(msgType)
@@ -258,7 +256,7 @@ func createPeerMessage(msgType PeerMsgType, payload MessagePayload) PeerMessage 
 type BitFieldMessagePayload MessagePayload
 
 func (payload BitFieldMessagePayload) IsSet(i int) bool {
-	return !((payload[i / 8] >> (7 - i % 8)) == 0x0)
+	return !((payload[i/8] >> (7 - i%8)) == 0x0)
 }
 
 func CreateRequestMessage(index int, begin int, length int) PeerMessage {

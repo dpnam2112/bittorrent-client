@@ -15,8 +15,8 @@ type TrackerAction int32
 const (
 	TrackerActionConnect  TrackerAction = 0x00
 	TrackerActionAnnounce TrackerAction = 0x01
-	TrackerActionScrape	  TrackerAction = 0x02
-	TrackerActionError	  TrackerAction = 0x03
+	TrackerActionScrape   TrackerAction = 0x02
+	TrackerActionError    TrackerAction = 0x03
 )
 
 type AnnounceEvent uint32
@@ -30,7 +30,7 @@ const (
 
 const (
 	UDPAnnounceRequestSize = 98
-	UDPConnectRequestSize = 16
+	UDPConnectRequestSize  = 16
 	UDPConnectResponseSize = 16
 )
 
@@ -135,7 +135,7 @@ func (req TrackerUDPAnnounceRequest) Marshal() []byte {
 func UnmarshalTrackerUDPAnnounceResponse(rawResponse []byte) (*TrackerUDPAnnounceResponse, error) {
 	// Validate the response size
 	responseSize := len(rawResponse)
-	if (responseSize - 20) % 6 != 0 {
+	if (responseSize-20)%6 != 0 {
 		return nil, errors.New("Announce response's size is invalid. Currently only IPv4 is supported.")
 	}
 
@@ -148,20 +148,20 @@ func UnmarshalTrackerUDPAnnounceResponse(rawResponse []byte) (*TrackerUDPAnnounc
 	peerCount := (responseSize - 20) / 6
 	peers := []PeerAddr{}
 	for i := 0; i < peerCount; i++ {
-		ipOffset := 20 + 6 * i
-		portOffset := 24 + 6 * i
+		ipOffset := 20 + 6*i
+		portOffset := 24 + 6*i
 		newPeer := PeerAddr{
-			IP: net.IP(rawResponse[ipOffset:ipOffset + 4]),
-			Port: binary.BigEndian.Uint16(rawResponse[portOffset:portOffset + 2]),
+			IP:   net.IP(rawResponse[ipOffset : ipOffset+4]),
+			Port: binary.BigEndian.Uint16(rawResponse[portOffset : portOffset+2]),
 		}
 		peers = append(peers, newPeer)
 	}
 
 	return &TrackerUDPAnnounceResponse{
-		TxnID: int32(binary.BigEndian.Uint32(rawResponse[4:8])),
-		Interval: int32(binary.BigEndian.Uint32(rawResponse[8:12])),
-		Leechers: int32(binary.BigEndian.Uint32(rawResponse[12:16])),
-		Seeders: int32(binary.BigEndian.Uint32(rawResponse[16:20])),
+		TxnID:         int32(binary.BigEndian.Uint32(rawResponse[4:8])),
+		Interval:      int32(binary.BigEndian.Uint32(rawResponse[8:12])),
+		Leechers:      int32(binary.BigEndian.Uint32(rawResponse[12:16])),
+		Seeders:       int32(binary.BigEndian.Uint32(rawResponse[16:20])),
 		PeerAddresses: peers,
 	}, nil
 }
@@ -205,7 +205,7 @@ func (req TrackerUDPConnectRequest) Action() TrackerAction {
 }
 
 type TrackerUDPConnectResponse struct {
-	TxnID int32
+	TxnID        int32
 	ConnectionID int64
 }
 
@@ -229,7 +229,7 @@ func UnmarshalTrackerUDPConnectResponse(rawResponse []byte) (*TrackerUDPConnectR
 	connID := int64(binary.BigEndian.Uint64(rawResponse[8:16]))
 
 	return &TrackerUDPConnectResponse{
-		TxnID: txnID,
+		TxnID:        txnID,
 		ConnectionID: connID,
 	}, nil
 }
@@ -252,7 +252,7 @@ func UnmarshalTrackerUDPErrorResponse(rawResponse []byte) (*TrackerUDPErrorRespo
 	txnID := int32(binary.BigEndian.Uint32(rawResponse[4:8]))
 
 	return &TrackerUDPErrorResponse{
-		TxnID: txnID,
+		TxnID:   txnID,
 		Message: string(rawResponse[8:]),
 	}, nil
 }

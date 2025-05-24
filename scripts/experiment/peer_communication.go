@@ -17,8 +17,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/dpnam2112/bittorrent-client/torrent"
 	"github.com/dpnam2112/bittorrent-client/peerwire"
+	"github.com/dpnam2112/bittorrent-client/torrent"
 )
 
 func main() {
@@ -43,14 +43,14 @@ func main() {
 	fmt.Println(torrent.String())
 	fmt.Println("Torrent's infohash:", fmt.Sprintf("% x\n", infohash))
 
-    addrStr := "127.0.0.1:6881"
+	addrStr := "127.0.0.1:6881"
 
 	// Example peer ID (20 bytes, usually starts with client ID like "-GT0001-")
 	peerIDStr := "-GO0001-123456789012"
 	peerID := [20]byte{}
 	copy(peerID[:], []byte(peerIDStr))
-    
-		conn, err := peerwire.CreatePeerWireConnection(addrStr, *slog.Default())
+
+	conn, err := peerwire.CreatePeerWireConnection(addrStr, *slog.Default())
 	if err != nil {
 		panic(err)
 	}

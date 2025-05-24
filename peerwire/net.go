@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	defaultReadTimeout int = 5000
+	defaultReadTimeout  int = 5000
 	defaultWriteTimeout int = 5000
 )
 
@@ -24,12 +24,12 @@ type PeerWireConnection interface {
 }
 
 type peerWireConnection struct {
-	logger slog.Logger
-	lpeerID [20]byte
-	conn net.Conn
-	connReader *bufio.Reader
-	connWriter *bufio.Writer
-	readTimeout int
+	logger       slog.Logger
+	lpeerID      [20]byte
+	conn         net.Conn
+	connReader   *bufio.Reader
+	connWriter   *bufio.Writer
+	readTimeout  int
 	writeTimeout int
 }
 
@@ -37,7 +37,7 @@ func CreatePeerWireConnection(
 	rAddr string,
 	logger slog.Logger,
 ) (PeerWireConnection, error) {
-	conn, err := net.DialTimeout("tcp", rAddr, 5 * time.Second)
+	conn, err := net.DialTimeout("tcp", rAddr, 5*time.Second)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error while initiating peer wire connection: %w", err)
@@ -49,8 +49,8 @@ func CreatePeerWireConnection(
 	)
 
 	c := peerWireConnection{
-		logger: logger,
-		conn: conn,
+		logger:     logger,
+		conn:       conn,
 		connReader: bufio.NewReader(conn),
 		connWriter: bufio.NewWriter(conn),
 	}
@@ -97,7 +97,6 @@ func (c *peerWireConnection) Handshake(
 		return nil, fmt.Errorf("Error while initiating peer wire connection: %w", err)
 	}
 	c.logger.Debug("Sent handshake message", "raw_msg", fmt.Sprintf("% x", handshakeMsg), "bytes_sent_count", n)
-
 
 	recvHandshakeMsg, err := readHandshakeMessage(c.connReader)
 	if err != nil {
@@ -181,7 +180,7 @@ func (c *peerWireConnection) readPeerMessage() (PeerMessage, error) {
 	bodyLen := binary.BigEndian.Uint32(prefLenBytes)
 
 	// 'unmarshal' data to a message instance
-	msg := make([]byte, 4 + bodyLen) 
+	msg := make([]byte, 4+bodyLen)
 	copy(msg[:4], prefLenBytes)
 	_, err = io.ReadFull(r, msg[4:])
 
@@ -191,4 +190,3 @@ func (c *peerWireConnection) readPeerMessage() (PeerMessage, error) {
 
 	return peerMessage(msg), nil
 }
-
