@@ -1,11 +1,18 @@
 package peerwire
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
+	"io"
 )
 
+type Message interface {
+	Length() uint32
+}
+
 type HandshakeMessage interface {
+	Message
 	Protocol() string
 	InfoHash() [20]byte
 	PeerID() [20]byte
@@ -27,6 +34,11 @@ type handshakeMessage []byte
 func (msg handshakeMessage) Protocol() string {
 	pStrLen := msg[0]
 	return string(msg[1:1 + pStrLen])
+}
+
+func (msg handshakeMessage) Length() uint32 {
+	pstrLen := msg[0]
+	return 49 + uint32(pstrLen)
 }
 
 // Create peer-wire protocol handshake message
@@ -53,18 +65,18 @@ func createHandshakeMessage(protocolName string, infohash, peerID [20]byte,) (ha
 // is invalid, return an error.
 // The input can contains a handshake followed with multiple peer messages. In this case, the
 // function only returns the representation of the handshake message only.
-func readHandshakeMessage(raw []byte) (handshakeMessage, error) {
-	if len(raw) == 0 {
-		return nil, fmt.Errorf("Message's length is 0.")
+func readHandshakeMessage(r *bufio.Reader) (handshakeMessage, error) {
+	pstrLen, err := r.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("Error while reading handshake message from reader: %w", err)
 	}
 
-	pStrLen := uint8(raw[0])
-	handshakeMsgSize := int(pStrLen) + 49
-	if len(raw) < handshakeMsgSize  {
-		return nil, fmt.Errorf("Invalid message length.")
-	}
+	size := 1 + int(pstrLen) + 48
+	msg := make([]byte, size)
+	msg[0] = pstrLen
+	io.ReadFull(r, msg[1:1 + pstrLen + 48])
 
-	return handshakeMessage(raw[:handshakeMsgSize]), nil
+	return handshakeMessage(msg), nil
 }
 
 func (msg handshakeMessage) InfoHash() [20]byte {
@@ -84,7 +96,6 @@ func (msg handshakeMessage) PeerID() [20]byte {
 
 type PeerMsgType uint8
 
-
 const (
 	TypeChoke         PeerMsgType = 0
 	TypeUnchoke       PeerMsgType = 1
@@ -96,21 +107,96 @@ const (
 	TypePiece         PeerMsgType = 7
 	TypeCancel        PeerMsgType = 8
 	TypePort          PeerMsgType = 9
+	TypeHaveNone		  PeerMsgType = 0xf
 	// KeepAlive is a special case — it has no ID and length is 0
 	TypeKeepAlive PeerMsgType = 255 // Reserved for internal handling
 )
 
+func (t PeerMsgType) String() string {
+	switch t {
+	case TypeChoke:
+		return "Choke"
+	case TypeUnchoke:
+		return "Unchoke"
+	case TypeInterested:
+		return "Interested"
+	case TypeNotInterested:
+		return "NotInterested"
+	case TypeHave:
+		return "Have"
+	case TypeBitfield:
+		return "Bitfield"
+	case TypeRequest:
+		return "Request"
+	case TypePiece:
+		return "Piece"
+	case TypeCancel:
+		return "Cancel"
+	case TypePort:
+		return "Port"
+	case TypeHaveNone:
+		return "HaveNone"
+	case TypeKeepAlive:
+		return "KeepAlive"
+	default:
+		return fmt.Sprintf("UnknownPeerMsgType(%d)", uint8(t))
+	}
+}
+
+
+// Peer wire protocol message format:
+//
+// Each message (after the handshake) is length-prefixed and consists of:
+//
+//   [ length_prefix (4 bytes) ][ message_id (1 byte) ][ payload (variable) ]
+//
+// - length_prefix: 4-byte big-endian uint32 indicating the length of message_id + payload.
+// - message_id: 1 byte indicating the message type (not present if length == 0).
+// - payload: varies by message type (e.g., piece index, block data).
+//
+// A message with length_prefix == 0 is a Keep-Alive message and has no message_id or payload.
 type PeerMessage interface {
+	Message
 	Type() PeerMsgType
-	Length() uint32
 	Payload() MessagePayload
+	Raw() []byte
 }
 
 type peerMessage []byte
 type MessagePayload []byte
 
+func readPeerMessage(r *bufio.Reader) (PeerMessage, error) {
+	// read message length
+	prefLenBytes := make([]byte, 4)
+	_, err := io.ReadFull(r, prefLenBytes)
+
+	if err != nil {
+		return nil, fmt.Errorf("An error occurred while reading peer message: %w", err)
+	}
+
+	bodyLen := binary.BigEndian.Uint32(prefLenBytes)
+
+	// 'unmarshal' data to a message instance
+	msg := make([]byte, 4 + bodyLen) 
+	copy(msg[:4], prefLenBytes)
+	_, err = io.ReadFull(r, msg[4:])
+
+	if err != nil {
+		return nil, fmt.Errorf("An error occurred while reading peer message: %w", err)
+	}
+
+	return peerMessage(msg), nil
+}
+
+func (msg peerMessage) Raw() []byte {
+	return []byte(msg)
+}
+
 func (msg peerMessage) Type() PeerMsgType {
-	return PeerMsgType(msg[0])
+	if len(msg) == 4 {
+		return TypeKeepAlive
+	}
+	return PeerMsgType(msg[4])
 }
 
 func (msg peerMessage) Length() uint32 {
@@ -118,7 +204,7 @@ func (msg peerMessage) Length() uint32 {
 }
 
 func (msg peerMessage) Payload() MessagePayload {
-	return MessagePayload(msg[5:1 + msg.Length()])
+	return MessagePayload(msg[5:4 + msg.Length()])
 }
 
 func AsPeerMessage(raw []byte) (PeerMessage, error) {
@@ -146,14 +232,67 @@ func (payload PieceMessagePayload) Begin() uint32 {
 	return binary.BigEndian.Uint32(payload[4:8])
 }
 
-func (payload PieceMessagePayload) Piece() uint32 {
-	return binary.BigEndian.Uint32(payload[8:])
+func (payload PieceMessagePayload) Piece() []byte {
+	return payload[8:]
 }
 
 func createPeerMessage(msgType PeerMsgType, payload MessagePayload) PeerMessage {
-	raw := make([]byte, 5 + len(payload))
-	length := 1 + len(payload)
-	binary.BigEndian.PutUint32(raw, uint32(length))
-	raw[4] = byte(msgType)
+	payloadLen := 0
+
+	if payload != nil {
+		payloadLen = len(payload)
+		raw := make([]byte, 5 + payloadLen)
+		lenFieldValue := 1 + len(payload)
+		binary.BigEndian.PutUint32(raw[:4], uint32(lenFieldValue))
+		raw[4] = byte(msgType)
+		copy(raw[5:], payload)
+		return peerMessage(raw)
+	} else {
+		raw := make([]byte, 5)
+		binary.BigEndian.PutUint32(raw, 1)
+		raw[4] = byte(msgType)
+		return peerMessage(raw)
+	}
+}
+
+type BitFieldMessagePayload MessagePayload
+
+func (payload BitFieldMessagePayload) IsSet(i int) bool {
+	return !((payload[i / 8] >> (7 - i % 8)) == 0x0)
+}
+
+func CreateRequestMessage(index int, begin int, length int) PeerMessage {
+	msgPayload := make(MessagePayload, 12)
+	binary.BigEndian.PutUint32(msgPayload[:4], uint32(index))
+	binary.BigEndian.PutUint32(msgPayload[4:8], uint32(begin))
+	binary.BigEndian.PutUint32(msgPayload[8:12], uint32(length))
+	return createPeerMessage(TypeRequest, msgPayload)
+}
+
+func CreateChokeMessage() PeerMessage {
+	return createPeerMessage(TypeChoke, nil)
+}
+
+func CreateUnchokeMessage() PeerMessage {
+	return createPeerMessage(TypeUnchoke, nil)
+}
+
+func CreateInterestedMessage() PeerMessage {
+	return createPeerMessage(TypeInterested, nil)
+}
+
+func CreateNotInterestedMessage() PeerMessage {
+	return createPeerMessage(TypeNotInterested, nil)
+}
+
+func CreateHaveMessage(index int) PeerMessage {
+	raw := make([]byte, 9)
+	binary.BigEndian.PutUint32(raw[:4], 5)
+	raw[4] = byte(TypeHave)
+	binary.BigEndian.PutUint32(raw[5:], uint32(index))
 	return peerMessage(raw)
+}
+
+func CreateHaveNoneMessage() PeerMessage {
+	return createPeerMessage(TypeHaveNone, nil)
 }
