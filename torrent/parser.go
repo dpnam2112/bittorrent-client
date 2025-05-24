@@ -119,14 +119,12 @@ func parseInfoDict(infoDict *bencode.BDict) InfoDict {
 		}
 	}
 
-
 	return InfoDict{
-		name: name,
+		name:        name,
 		pieceLength: pieceLength,
-		pieces: pieces,
-		length: length,
-		files: files,
-		rawBencode: infoDict.GetRawBencode(),
+		pieces:      pieces,
+		length:      length,
+		files:       files,
+		rawBencode:  infoDict.GetRawBencode(),
 	}
 }
-

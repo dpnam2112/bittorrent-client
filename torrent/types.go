@@ -40,7 +40,7 @@ type InfoDict struct {
 	pieces      []byte
 	length      int64
 	files       []FileEntry
-	rawBencode	[]byte			// raw bencode representation of the info dictionary. This is used to compute SHA-1 hash of the torrent.
+	rawBencode  []byte // raw bencode representation of the info dictionary. This is used to compute SHA-1 hash of the torrent.
 	hash        [20]byte
 }
 
@@ -125,4 +125,3 @@ func (t Torrent) String() string {
 
 	return sb.String()
 }
-

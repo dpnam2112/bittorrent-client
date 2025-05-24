@@ -15,7 +15,7 @@ func (client *TrackerUDPClient) SendConnectRequest(trackerIP net.IP, trackerPort
 	// remote address
 	raddr := net.UDPAddr{
 		Port: trackerPort,
-		IP: trackerIP,
+		IP:   trackerIP,
 	}
 
 	conn, err := net.DialUDP("udp", nil, &raddr)
@@ -78,7 +78,7 @@ func (client *TrackerUDPClient) SendAnnounceRequest(
 	r *TrackerUDPAnnounceRequest,
 ) (*TrackerUDPAnnounceResponse, error) {
 	raddr := net.UDPAddr{
-		IP: trackerIP,
+		IP:   trackerIP,
 		Port: trackerPort,
 	}
 
