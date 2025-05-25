@@ -61,24 +61,6 @@ func createHandshakeMessage(protocolName string, infohash, peerID [20]byte) (han
 	return msg, nil
 }
 
-// readHandshakeMessage tries reading raw representation (slice) of the handshake message. if the format
-// is invalid, return an error.
-// The input can contains a handshake followed with multiple peer messages. In this case, the
-// function only returns the representation of the handshake message only.
-func readHandshakeMessage(r *bufio.Reader) (handshakeMessage, error) {
-	pstrLen, err := r.ReadByte()
-	if err != nil {
-		return nil, fmt.Errorf("Error while reading handshake message from reader: %w", err)
-	}
-
-	size := 1 + int(pstrLen) + 48
-	msg := make([]byte, size)
-	msg[0] = pstrLen
-	io.ReadFull(r, msg[1:1+pstrLen+48])
-
-	return handshakeMessage(msg), nil
-}
-
 func (msg handshakeMessage) InfoHash() [20]byte {
 	infohashOffset := 1 + msg[0] + 8
 	infoHash := [20]byte{}

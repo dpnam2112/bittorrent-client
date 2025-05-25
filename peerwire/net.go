@@ -20,7 +20,7 @@ type PeerWireConnection interface {
 	SendPeerMessages(messages []PeerMessage) error
 	ReadPeerMessage() (PeerMessage, error)
 	Handshake(peerID [20]byte, protocolName string, infoHash [20]byte) (HandshakeMessage, error)
-	Close() error
+	io.Closer
 }
 
 type peerWireConnection struct {
@@ -98,7 +98,7 @@ func (c *peerWireConnection) Handshake(
 	}
 	c.logger.Debug("Sent handshake message", "raw_msg", fmt.Sprintf("% x", handshakeMsg), "bytes_sent_count", n)
 
-	recvHandshakeMsg, err := readHandshakeMessage(c.connReader)
+	recvHandshakeMsg, err := c.readHandshakeMessage()
 	if err != nil {
 		return nil, fmt.Errorf("Error while initiating peer wire connection: %w", err)
 	}
@@ -120,13 +120,33 @@ func (c *peerWireConnection) Handshake(
 	return recvHandshakeMsg, nil
 }
 
+// readHandshakeMessage tries reading raw representation (slice) of the handshake message. if the format
+// is invalid, return an error.
+// The input can contains a handshake followed with multiple peer messages. In this case, the
+// function only returns the representation of the handshake message only.
+func (c *peerWireConnection) readHandshakeMessage() (handshakeMessage, error) {
+	r := c.connReader
+
+	pstrLen, err := r.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("Error while reading handshake message from reader: %w", err)
+	}
+
+	size := 1 + int(pstrLen) + 48
+	msg := make([]byte, size)
+	msg[0] = pstrLen
+	io.ReadFull(r, msg[1:1+pstrLen+48])
+
+	return handshakeMessage(msg), nil
+}
+
+
 // SendMessages sends a list of messages to the peer over a connection-oriented protocol.
 func (c *peerWireConnection) SendPeerMessages(messages []PeerMessage) error {
 	writer := c.connWriter
 
 	c.logger.Debug("Start sending peer messages")
-	for i := 0; i < len(messages); i++ {
-		msg := messages[i]
+	for i, msg := range messages {
 		c.logger.Debug("Peer message", "i", i, "type", msg.Type().String())
 		_, err := writer.Write(messages[i].Raw())
 		if err != nil {
