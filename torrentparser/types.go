@@ -1,4 +1,4 @@
-package torrent
+package torrentparser
 
 import (
 	"crypto/sha1"
@@ -6,30 +6,30 @@ import (
 	"strings"
 )
 
-// Torrent represents the parsed content of a .torrent file.
-type Torrent struct {
+// TorrentMetainfo represents the parsed content of a .torrent file.
+type TorrentMetainfo struct {
 	announce     string
 	announceList [][]string
 	info         InfoDict
 }
 
-func NewTorrent(announce string, announceList [][]string, info InfoDict) Torrent {
-	return Torrent{
+func NewTorrentMetainfo(announce string, announceList [][]string, info InfoDict) TorrentMetainfo {
+	return TorrentMetainfo{
 		announce:     announce,
 		announceList: announceList,
 		info:         info,
 	}
 }
 
-func (t Torrent) Announce() string {
+func (t TorrentMetainfo) Announce() string {
 	return t.announce
 }
 
-func (t Torrent) AnnounceList() [][]string {
+func (t TorrentMetainfo) AnnounceList() [][]string {
 	return t.announceList
 }
 
-func (t Torrent) Info() InfoDict {
+func (t TorrentMetainfo) Info() InfoDict {
 	return t.info
 }
 
@@ -92,10 +92,10 @@ func (f FileEntry) Path() []string {
 	return f.path
 }
 
-func (t Torrent) String() string {
+func (t TorrentMetainfo) String() string {
 	var sb strings.Builder
 
-	sb.WriteString("=== Torrent Info ===\n")
+	sb.WriteString("=== TorrentMetainfo Info ===\n")
 	sb.WriteString(fmt.Sprintf("Announce: %s\n", t.Announce()))
 
 	if len(t.AnnounceList()) > 0 {

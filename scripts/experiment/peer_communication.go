@@ -18,7 +18,7 @@ import (
 	"os"
 
 	"github.com/dpnam2112/bittorrent-client/peerwire"
-	"github.com/dpnam2112/bittorrent-client/torrent"
+	"github.com/dpnam2112/bittorrent-client/torrentparser"
 )
 
 func main() {
@@ -35,7 +35,7 @@ func main() {
 
 	defer f.Close()
 	reader := bufio.NewReader(f)
-	torrent, err := torrent.ParseTorrent(reader)
+	torrent, err := torrentparser.ParseTorrent(reader)
 	infohash := torrent.Info().Hash()
 
 	fmt.Println("Parsed the torrent:", path)

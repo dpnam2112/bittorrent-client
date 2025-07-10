@@ -1,4 +1,4 @@
-package torrent
+package torrentparser
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 )
 
 // ParseTorrent reads and parses a torrent from an io.Reader into a Torrent struct.
-func ParseTorrent(reader io.Reader) (*Torrent, error) {
+func ParseTorrent(reader io.Reader) (*TorrentMetainfo, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read torrent data: %w", err)
@@ -61,7 +61,7 @@ func ParseTorrent(reader io.Reader) (*Torrent, error) {
 	}
 	info = parseInfoDict(infoVal)
 
-	torrent := NewTorrent(announce, announceList, info)
+	torrent := NewTorrentMetainfo(announce, announceList, info)
 	return &torrent, nil
 }
 
