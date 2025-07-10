@@ -33,7 +33,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dpnam2112/bittorrent-client/torrent"
+	"github.com/dpnam2112/bittorrent-client/torrentparser"
 	"github.com/dpnam2112/bittorrent-client/trackerclient"
 )
 
@@ -49,7 +49,7 @@ func main() {
 
 	reader := bufio.NewReader(f)
 
-	torrent, err := torrent.ParseTorrent(reader)
+	torrent, err := torrentparser.ParseTorrent(reader)
 	fmt.Println("Parsed the torrent")
 	fmt.Println("Torrent's content:")
 	fmt.Println(torrent.String())
