@@ -140,7 +140,6 @@ func (c *peerWireConnection) readHandshakeMessage() (handshakeMessage, error) {
 	return handshakeMessage(msg), nil
 }
 
-
 // SendMessages sends a list of messages to the peer over a connection-oriented protocol.
 func (c *peerWireConnection) SendPeerMessages(messages []PeerMessage) error {
 	writer := c.connWriter
