@@ -15,15 +15,13 @@ type TorrentClient interface {
 	common.LifeCycle
 }
 
-
 type torrentClientImpl struct {
-	metainfo *torrentparser.TorrentMetainfo
+	metainfo            *torrentparser.TorrentMetainfo
 	trackerPeerResolver trackerclient.TrackerPeerResolver
-	connectedPeers []peer.Peer
-	ctx context.Context
-	Logger slog.Logger
+	connectedPeers      []peer.Peer
+	ctx                 context.Context
+	Logger              slog.Logger
 }
-
 
 func (c *torrentClientImpl) NewTorrentClient(metainfo *torrentparser.TorrentMetainfo, logger slog.Logger) TorrentClient {
 	client := torrentClientImpl{}
@@ -38,7 +36,6 @@ func (c *torrentClientImpl) NewTorrentClient(metainfo *torrentparser.TorrentMeta
 	return &client
 }
 
-
 func (c *torrentClientImpl) Start(context context.Context) error {
 	c.ctx = context
 	if err := c.trackerPeerResolver.Start(context); err != nil {
@@ -47,7 +44,6 @@ func (c *torrentClientImpl) Start(context context.Context) error {
 
 	return nil
 }
-
 
 // handlePeerDiscovery is used as callback for PeerResolver component.
 // every time new peers are discovered, this function is invoked for establishing peer connections.
@@ -59,7 +55,6 @@ func (c *torrentClientImpl) handlePeerDiscovery(peers []peer.Peer) error {
 	return nil
 }
 
-
 func (c *torrentClientImpl) connectPeer(peer peer.Peer) {
 	if err := peer.Start(c.ctx); err != nil {
 		c.Logger.Error("Error when connecting to peer:", "err", err)
@@ -68,7 +63,6 @@ func (c *torrentClientImpl) connectPeer(peer peer.Peer) {
 	// TODO: Avoid race condition here
 	c.connectedPeers = append(c.connectedPeers, peer)
 }
-
 
 func (c *torrentClientImpl) Close() error {
 	if err := c.trackerPeerResolver.Close(); err != nil {
