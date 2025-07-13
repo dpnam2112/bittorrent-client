@@ -17,7 +17,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/dpnam2112/bittorrent-client/peerwire"
+	"github.com/dpnam2112/bittorrent-client/peer"
 	"github.com/dpnam2112/bittorrent-client/torrentparser"
 )
 
@@ -50,7 +50,7 @@ func main() {
 	peerID := [20]byte{}
 	copy(peerID[:], []byte(peerIDStr))
 
-	conn, err := peerwire.CreatePeerWireConnection(addrStr, *slog.Default())
+	conn, err := peer.CreatePeerWireConnection(addrStr, *slog.Default())
 	if err != nil {
 		panic(err)
 	}
@@ -70,8 +70,8 @@ func main() {
 	}
 	fmt.Println("Received message of type:", msg.Type())
 
-	if msg.Type() == peerwire.TypeBitfield {
-		bitfield := peerwire.BitFieldMessagePayload(msg.Payload())
+	if msg.Type() == peer.TypeBitfield {
+		bitfield := peer.BitFieldMessagePayload(msg.Payload())
 		fmt.Printf("Bitfield: % x\n", bitfield)
 		fmt.Println("Is bit 0 set:", bitfield.IsSet(0))
 	}
@@ -84,22 +84,22 @@ func main() {
 		}
 		fmt.Println("Received message of type:", msg.Type())
 
-		if msg.Type() == peerwire.TypeUnchoke {
+		if msg.Type() == peer.TypeUnchoke {
 			fmt.Println("Unchoked by peer, ready to send requests")
 			break
 		}
 	}
 
 	// Optional: Send Interested if you want to download
-	// messages := []peerwire.PeerMessage{
-	//     peerwire.CreateInterestedMessage(),
+	// messages := []peer.PeerMessage{
+	//     peer.CreateInterestedMessage(),
 	// }
 	// conn.SendPeerMessages(messages)
 
 	// Step 4: Request piece
-	err = conn.SendPeerMessages([]peerwire.PeerMessage{
-		peerwire.CreateInterestedMessage(),
-		peerwire.CreateRequestMessage(0, 0, 1741),
+	err = conn.SendPeerMessages([]peer.PeerMessage{
+		peer.CreateInterestedMessage(),
+		peer.CreateRequestMessage(0, 0, 1741),
 	})
 	if err != nil {
 		panic(err)
@@ -107,7 +107,7 @@ func main() {
 	fmt.Println("Sent Request for piece 0, offset 0, length 16KB")
 
 	// Step 5: Wait for Piece
-	for msg.Type() != peerwire.TypePiece {
+	for msg.Type() != peer.TypePiece {
 
 		msg, err = conn.ReadPeerMessage()
 		if err != nil {
@@ -117,7 +117,7 @@ func main() {
 	}
 
 	fmt.Println("Received a piece message.")
-	piecePayload := peerwire.PieceMessagePayload(msg.Payload())
+	piecePayload := peer.PieceMessagePayload(msg.Payload())
 	fmt.Println("Piece length:", len(piecePayload.Piece()))
 	fmt.Println("Piece content:", string(piecePayload.Piece()[:100]), "... (concatenated)")
 }
