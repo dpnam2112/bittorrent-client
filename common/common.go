@@ -4,23 +4,23 @@ import "context"
 
 type (
 	// Internal ID of a torrent
-	TorrentID uint16
+	TorrentID  uint16
 	PieceIndex uint32
-	PeerID [20]byte
-	InfoHash [20]byte
+	PeerID     [20]byte
+	InfoHash   [20]byte
 	// BlockSize and BlockOFfset 's sizes follow the specification of peer message protocol
 	BlockSize uint32
-	
+
 	BlockOffset uint32
-	PeerAddr struct {
+	PeerAddr    struct {
 		Host string
 		Port uint16
 	}
 
 	BlockID struct {
 		PieceIndex PieceIndex
-		Begin BlockOffset
-		Size BlockSize
+		Begin      BlockOffset
+		Size       BlockSize
 	}
 )
 

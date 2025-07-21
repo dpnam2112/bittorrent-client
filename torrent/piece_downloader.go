@@ -8,7 +8,6 @@ import (
 	"github.com/dpnam2112/bittorrent-client/torrentparser"
 )
 
-
 type PieceDownloader interface {
 	// Add a list of peers to download the piece
 	AddPeers([]peer.Peer)
@@ -30,12 +29,11 @@ func NewPieceDownloader(
 	return &pieceDownloaderImpl{}, nil
 }
 
-
 type pieceDownloaderImpl struct {
-	pieceIndex common.PieceIndex
-	metainfo torrentparser.TorrentMetainfo
+	pieceIndex     common.PieceIndex
+	metainfo       torrentparser.TorrentMetainfo
 	torrentStorage TorrentStorage
-	peers []peer.Peer
+	peers          []peer.Peer
 }
 
 func (downloader *pieceDownloaderImpl) DownloadWithContext(ctx context.Context) error

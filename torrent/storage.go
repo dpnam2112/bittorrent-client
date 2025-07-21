@@ -5,7 +5,6 @@ import (
 	"github.com/dpnam2112/bittorrent-client/torrentparser"
 )
 
-
 type TorrentStorage interface {
 	StoreBlock(common.BlockID, []byte)
 
@@ -17,6 +16,5 @@ type TorrentStorage interface {
 
 	ExistingPieces() []common.PieceIndex
 }
-
 
 func NewTorrentStorage(metainfo *torrentparser.TorrentMetainfo, location string) TorrentStorage

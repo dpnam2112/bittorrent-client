@@ -12,7 +12,7 @@ type AnnoucementData struct {
 	Downloaded int64
 	Left       int64
 	Event      AnnounceEvent
-	numWant	uint16
+	numWant    uint16
 }
 
 type PeerDiscoveryHandler func(peers []common.PeerAddr) error
