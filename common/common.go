@@ -2,19 +2,37 @@ package common
 
 import "context"
 
-// Internal ID of a torrent
-type TorrentID uint16
+type (
+	// Internal ID of a torrent
+	TorrentID uint16
+	PieceIndex uint32
+	PeerID [20]byte
+	InfoHash [20]byte
+	// BlockSize and BlockOFfset 's sizes follow the specification of peer message protocol
+	BlockSize uint32
+	
+	BlockOffset uint32
+	PeerAddr struct {
+		Host string
+		Port uint16
+	}
 
-type PeerID [20]byte
+	BlockID struct {
+		PieceIndex PieceIndex
+		Begin BlockOffset
+		Size BlockSize
+	}
+)
 
-type InfoHash [20]byte
+const (
+	DefaultBlockSize BlockSize = 16384 // 16 kB
+)
 
-type PeerAddr struct {
-	Host string
-	Port uint16
+type Closer interface {
+	Close() error
 }
 
 type LifeCycle interface {
 	Start(context context.Context) error
-	Close() error
+	Closer
 }
