@@ -17,6 +17,7 @@ type (
 		Port uint16
 	}
 
+	// Blocks are identified by the triple of (piece index, begin, length)
 	BlockID struct {
 		PieceIndex PieceIndex
 		Begin      BlockOffset

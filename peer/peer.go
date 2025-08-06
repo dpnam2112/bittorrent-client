@@ -6,6 +6,7 @@ import (
 	"github.com/dpnam2112/bittorrent-client/common"
 )
 
+
 // Bittorrent supports two protocols for peer communication: TCP and uTP. But TCP suffers from NAT
 // traversal, hence the strategy should be:
 // - Try connecting using uTP first
@@ -15,18 +16,17 @@ type Peer interface {
 
 	// Register message handler (name + handler instance)
 	// Registered handler will be called when a peer receive a peer message
-	RegisterMsgHandler(name string, handler MsgHandler)
+	// If there is already a message handler registered with name `name`, the method will return an
+	// error.
+	RegisterMsgHandler(name string, handler MsgHandler) error
 
 	// Remove message handler by name
 	RemoveMsgHandler(string)
 
 	Addr() common.PeerAddr
 
+	// Return a list of pieces the peer owns.
 	Pieces() []common.PieceIndex
-
-	// Instances of this interface are expected to maintain an internal message buffer.
-	// These methods enqueue peer messages to the internal message buffer.
-	Request(pieceIndex common.PieceIndex, begin, length int)
 }
 
 // TODO: Create a new peer
