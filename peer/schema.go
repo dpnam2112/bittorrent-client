@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	"github.com/dpnam2112/bittorrent-client/common"
 )
 
 type Message interface {
@@ -145,29 +147,6 @@ type PeerMessage interface {
 type peerMessage []byte
 type MessagePayload []byte
 
-func readPeerMessage(r *bufio.Reader) (PeerMessage, error) {
-	// read message length
-	prefLenBytes := make([]byte, 4)
-	_, err := io.ReadFull(r, prefLenBytes)
-
-	if err != nil {
-		return nil, fmt.Errorf("An error occurred while reading peer message: %w", err)
-	}
-
-	bodyLen := binary.BigEndian.Uint32(prefLenBytes)
-
-	// 'unmarshal' data to a message instance
-	msg := make([]byte, 4+bodyLen)
-	copy(msg[:4], prefLenBytes)
-	_, err = io.ReadFull(r, msg[4:])
-
-	if err != nil {
-		return nil, fmt.Errorf("An error occurred while reading peer message: %w", err)
-	}
-
-	return peerMessage(msg), nil
-}
-
 func (msg peerMessage) Raw() []byte {
 	return []byte(msg)
 }
@@ -237,7 +216,7 @@ func createPeerMessage(msgType PeerMsgType, payload MessagePayload) PeerMessage 
 
 type BitFieldMessagePayload MessagePayload
 
-func (payload BitFieldMessagePayload) IsSet(i int) bool {
+func (payload BitFieldMessagePayload) IsSet(i common.PieceIndex) bool {
 	return !((payload[i/8] >> (7 - i%8)) == 0x0)
 }
 

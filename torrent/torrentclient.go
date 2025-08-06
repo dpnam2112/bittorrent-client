@@ -7,73 +7,61 @@ import (
 
 	"github.com/dpnam2112/bittorrent-client/common"
 	"github.com/dpnam2112/bittorrent-client/peer"
-	"github.com/dpnam2112/bittorrent-client/torrentparser"
+	"github.com/dpnam2112/bittorrent-client/piece"
 	"github.com/dpnam2112/bittorrent-client/trackerclient"
 )
 
 type TorrentClient interface {
-	common.LifeCycle
+	common.Closer
 	Download(context.Context) error
 	ClientID() common.PeerID
 }
 
-type blockDownloadingState struct {
-	blockID common.BlockID
+type PeerFactory func (*common.TorrentMetainfo, common.PeerAddr) (peer.Peer, error)
+type PieceDownloaderFactory func (*common.TorrentMetainfo, common.PieceIndex) (PieceDownloader, error)
 
-	// Peers used to download the block
-	// A block request may be sent to multiple peers so that the average rtt for retrieving a block
-	// can be reduced (downloading speed varies across peers)
-	usedPeers []common.PeerAddr
+type factoryConfig struct {
+	createNewPeer  PeerFactory
+	createNewPieceDownloader PieceDownloaderFactory
+}
 
-	downloaded bool
+type torrentStat struct {
+	downloaded int64 
+	uploaded int64
+	left int64
 }
 
 type torrentClientImpl struct {
-	metainfo            *torrentparser.TorrentMetainfo
+	metainfo            *common.TorrentMetainfo
 	trackerPeerResolver trackerclient.TrackerPeerResolver
 	peers               map[common.PeerAddr]peer.Peer
-	discoveredPeerAddrs []common.PeerAddr
-	torrentStorage      TorrentStorage
+	pieceRepo			piece.PieceRepository
+	pieceSelector		PieceSelector
 	logger              slog.Logger
 	cancelFn            context.CancelFunc
 	pieceDownloaders    map[common.PieceIndex]PieceDownloader
-
-	clientID common.PeerID
+	factoryCfg			factoryConfig
+	stat				torrentStat 
+	clientID			common.PeerID
 }
 
-func (c *torrentClientImpl) NewTorrentClient(metainfo *torrentparser.TorrentMetainfo, location string, logger slog.Logger) TorrentClient {
-	client := torrentClientImpl{}
+func (c *torrentClientImpl) NewTorrentClient(metainfo *common.TorrentMetainfo, location string, logger slog.Logger) (TorrentClient, error) {
+	var err error
 
+	client := torrentClientImpl{}
 	client.metainfo = metainfo
-	client.trackerPeerResolver = trackerclient.NewTrackerPeerResolver(client.metainfo)
-	client.torrentStorage = NewTorrentStorage(metainfo, location)
+
+	client.trackerPeerResolver, err = trackerclient.NewTrackerPeerResolver(client.metainfo)
+	if err != nil {
+		return nil, fmt.Errorf("Error initializing client.trackerPeerResolver: %w", err)
+	}
+
+	// initialize stat information (downloaded, uploaded, left)
+	c.initTorrentStat()
+
 	client.logger = logger
 
-	client.initPieceDownloader()
-	client.initTrackerPeerResolver()
-
-	return &client
-}
-
-func (c *torrentClientImpl) initPieceDownloader() error {
-	if c.torrentStorage == nil {
-		return fmt.Errorf("Error initializing piece downloader: field 'torrentStorage' is not set.")
-	}
-
-	if c.metainfo == nil {
-		return fmt.Errorf("Error initializing piece downloader: field 'metainfo' is not set.")
-	}
-
-	for idx, _ := range c.metainfo.Info().Pieces() {
-		pieceIndex := common.PieceIndex(idx)
-		pieceDownloader, err := NewPieceDownloader(pieceIndex, *c.metainfo, c.torrentStorage)
-		if err != nil {
-			return fmt.Errorf("Error initializing piece downloader: %w", err)
-		}
-		c.pieceDownloaders[pieceIndex] = pieceDownloader
-	}
-
-	return nil
+	return &client, nil
 }
 
 func (c *torrentClientImpl) ClientID() common.PeerID {
@@ -84,19 +72,13 @@ func (c *torrentClientImpl) ClientID() common.PeerID {
 	return id
 }
 
-func (c *torrentClientImpl) Start(ctx context.Context) error {
-	if err := c.trackerPeerResolver.Start(ctx); err != nil {
-		return fmt.Errorf("Error when starting tracker peer resolver: %w", err)
+func (c *torrentClientImpl) Download(ctx context.Context) error {
+	pieceDownloaders, err := c.createPieceDownloaderMap()
+	if err != nil {
+		return fmt.Errorf("Error when calling Download: %w", err)
 	}
 
-	_, cancelFn := context.WithCancel(ctx)
-	c.cancelFn = cancelFn
-
-	return nil
-}
-
-func (c *torrentClientImpl) Download(ctx context.Context) error {
-	peerDiscoveryHandler := func(peerAddrs []common.PeerAddr) error {
+	peerDiscoveryHandler := func(peerAddrs []common.PeerAddr) {
 		for _, peerAddr := range peerAddrs {
 			if c.peers[peerAddr] != nil {
 				continue
@@ -111,65 +93,122 @@ func (c *torrentClientImpl) Download(ctx context.Context) error {
 
 			c.peers[peerAddr] = newPeer
 		}
-
-		return nil
 	}
 
 	c.trackerPeerResolver.AddPeerDiscoveredHandler(peerDiscoveryHandler)
 	announcementData := trackerclient.AnnoucementData{
-		Uploaded:   0,
-		Downloaded: 0,
-		Left:       0,
+		Uploaded:   c.stat.uploaded,
+		Downloaded: c.stat.downloaded,
+		Left:       c.stat.left,
 		Event:      trackerclient.AnnounceEventStarted,
 	}
 
 	c.trackerPeerResolver.SetAnnoucementData(announcementData)
-	c.trackerPeerResolver.Announce(ctx, announcementData)
 
-	// Calculate number of peers that own a piece, for each piece
-	// TODO: Add a loop to download every piece until all pieces are downloaded
-	// TODO: Skip pieces that are already downloaded
-	piecePeerCounts := make([]int, len(c.metainfo.Info().Pieces()))
-	for _, peer := range c.peers {
-		pieceIndices := peer.Pieces()
+	// Start the background job to send announce requests to trackers.
+	go c.trackerPeerResolver.RunAutoAnnouncer(ctx)
 
-		for _, index := range pieceIndices {
-			piecePeerCounts[index]++
+	// PieceSelector selects the next piece to be downloaded. If all pieces are downloaded already,
+	// it returns nil.
+	for pieceIndex, err := c.pieceSelector.SelectOne(); err == nil; {
+		pieceDownloader := pieceDownloaders[pieceIndex]
+		err := pieceDownloader.DownloadWithContext(ctx, DownloadEventHandler{
+			onBlockReceived: c.handleBlockReceived,
+			onAllBlocksReceived: c.handleAllBlocksReceived,
+		})
+
+		if err != nil {
+			return fmt.Errorf("Error when downloading piece %d: %w", pieceIndex, err)
 		}
-	}
-
-	selectedPiece, avail := 0, piecePeerCounts[0]
-
-	for pieceIndex, peerCount := range piecePeerCounts {
-		if peerCount < avail {
-			selectedPiece = pieceIndex
-		}
-	}
-
-	// TODO: Implement piece downloading strategy here
-	// e.g: Rarest first, Random first, etc.
-	c.downloadPiece(ctx, common.PieceIndex(selectedPiece))
-	return nil
-}
-
-func (c *torrentClientImpl) downloadPiece(ctx context.Context, pieceIndex common.PieceIndex) error {
-	pieceDownloader := c.pieceDownloaders[pieceIndex]
-
-	if err := pieceDownloader.DownloadWithContext(ctx); err != nil {
-		return fmt.Errorf("Error downloading the piece: %w", err)
 	}
 
 	return nil
 }
 
 func (c *torrentClientImpl) Close() error {
-	if err := c.trackerPeerResolver.Close(); err != nil {
-		c.logger.Error("Error when closing trackerPeerResolver:", "err", err)
-	}
-
 	return nil
 }
 
 // TODO: Initialize peer resolver and handler functions that will be called when new peers are
 // discovered.
-func (c *torrentClientImpl) initTrackerPeerResolver() error
+func (c *torrentClientImpl) initTrackerPeerResolver() error {
+	var err error
+	c.trackerPeerResolver, err = trackerclient.NewTrackerPeerResolver(c.metainfo)
+	if err != nil {
+		return fmt.Errorf("In initTrackerPeerResolver: %w", err)
+	}
+	return nil
+}
+
+func (c *torrentClientImpl) handleBlockReceived(blockID common.BlockID, data []byte) {
+	piece := c.pieceRepo.GetPieceByIndex(blockID.PieceIndex)
+	if err := piece.StoreBlock(blockID.Begin, blockID.Size); err != nil {
+		// TODO: This should be handled gracefully
+		c.logger.Error("Error storing block", "PieceIndex", blockID.PieceIndex, "Begin", blockID.Begin, "Size", blockID.Size)
+		return
+	}
+}
+
+// TODO: Handle the event all piece's blocks are downloaded
+// If a piece is successfully downloaded, update the torrent stat
+func (c *torrentClientImpl) handleAllBlocksReceived(pieceIdx common.PieceIndex) {
+	piece := c.pieceRepo.GetPieceByIndex(pieceIdx)
+	verified := piece.Verify()
+
+	if verified {
+		c.logger.Info("Piece downloaded successfully", "pieceIndex", pieceIdx)
+	} else {
+		c.logger.Info("Piece verification failed", "pieceIndex", pieceIdx)
+	}
+}
+
+
+// Handler implementation for peer messages
+// These handler functions are then registered for each peer.
+// the appropriate logic is called to handle each type of message.
+
+// Handle bitfield messages from other peers
+// Add the peer to the peer list of every piece downloader associated to pieces whose the peer owns.
+func (c *torrentClientImpl) onBitfieldMessage(peerAddr common.PeerAddr, payload peer.BitFieldMessagePayload) error {
+	var pieceIdx common.PieceIndex = 0
+	for ; pieceIdx < common.PieceIndex(len(c.metainfo.Info().Pieces())); pieceIdx++ {
+		if payload.IsSet(pieceIdx) {
+			c.pieceDownloaders[pieceIdx].AddPeers([]peer.Peer{c.peers[peerAddr]})
+		}
+	}
+	return nil
+}
+
+// Initialize piece downloaders for pieces that do not exist in the storage.
+func (c *torrentClientImpl) createPieceDownloaderMap() (map[common.PieceIndex]PieceDownloader, error) {
+	if c.pieceRepo == nil {
+		return nil, fmt.Errorf("Error in initPieceDownloaders: field 'pieceRepo' is not initialized.")
+	}
+
+	if c.metainfo == nil {
+		return nil, fmt.Errorf("Error initPieceDownloaders: field 'metainfo' is not set.")
+	}
+
+	pieceDownloaders := make(map[common.PieceIndex]PieceDownloader)
+
+	pieces := c.pieceRepo.GetAll()
+	for _, piece := range pieces {
+		if piece.Verify() {
+			continue
+		}
+
+		newPieceDownloader, err := c.factoryCfg.createNewPieceDownloader(c.metainfo, piece.Index())
+		if err != nil {
+			return nil, err
+		}
+		pieceDownloaders[piece.Index()] = newPieceDownloader
+	}
+
+	return pieceDownloaders, nil
+}
+
+
+func (c *torrentClientImpl) initTorrentStat() error {
+	return nil
+}
+
