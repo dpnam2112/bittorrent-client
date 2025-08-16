@@ -1,6 +1,9 @@
 package common
 
-import "context"
+import (
+	"context"
+	"net"
+)
 
 type (
 	// Internal ID of a torrent
@@ -13,7 +16,7 @@ type (
 
 	BlockOffset uint32
 	PeerAddr    struct {
-		Host string
+		IP	net.IP
 		Port uint16
 	}
 

@@ -1,4 +1,4 @@
-package trackerclient
+package tracker
 
 import (
 	"encoding/binary"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+
+	"github.com/dpnam2112/bittorrent-client/common"
 )
 
 type TrackerAction int32
@@ -18,6 +20,42 @@ const (
 	TrackerActionScrape   TrackerAction = 0x02
 	TrackerActionError    TrackerAction = 0x03
 )
+
+type AnnounceRequest struct {
+	InfoHash     common.InfoHash
+	PeerID       common.PeerID
+	Downloaded   int32
+	Uploaded     int32
+	Left         int32
+	Event        AnnounceEvent
+	IP	       net.IP
+	Port         uint16
+	Key          int32
+	NumWant      int32
+}
+
+type TrackerResponse interface {
+	TrackerAction() TrackerAction
+}
+
+type AnnounceResponse struct {
+	Interval      int32
+	Leechers      int32
+	Seeders       int32
+	PeerAddrs []common.PeerAddr
+}
+
+func (resp AnnounceResponse) TrackerAction() TrackerAction {
+	return TrackerActionAnnounce
+}
+
+type ErrorResponse struct {
+	Err string
+}
+
+func (resp ErrorResponse) TrackerAction() TrackerAction {
+	return TrackerActionError
+}
 
 type AnnounceEvent uint32
 
@@ -34,11 +72,6 @@ const (
 	UDPConnectResponseSize = 16
 )
 
-type PeerAddr struct {
-	IP   net.IP
-	Port uint16
-}
-
 type TrackerUDPResponse interface {
 	Action() TrackerAction
 }
@@ -52,7 +85,7 @@ type TrackerUDPAnnounceRequest struct {
 	Uploaded     int32
 	Left         int32
 	Event        AnnounceEvent
-	IPAddr       *net.IP
+	IPAddr       net.IP
 	Port         uint16
 	Key          int32
 	NumWant      int32
@@ -68,7 +101,7 @@ type TrackerUDPAnnounceResponse struct {
 	Interval      int32
 	Leechers      int32
 	Seeders       int32
-	PeerAddresses []PeerAddr
+	PeerAddresses []common.PeerAddr
 }
 
 type TrackerUDPErrorResponse struct {
@@ -146,11 +179,11 @@ func UnmarshalTrackerUDPAnnounceResponse(rawResponse []byte) (*TrackerUDPAnnounc
 
 	// Parse addreses of peers
 	peerCount := (responseSize - 20) / 6
-	peers := []PeerAddr{}
+	peers := []common.PeerAddr{}
 	for i := 0; i < peerCount; i++ {
 		ipOffset := 20 + 6*i
 		portOffset := 24 + 6*i
-		newPeer := PeerAddr{
+		newPeer := common.PeerAddr{
 			IP:   net.IP(rawResponse[ipOffset : ipOffset+4]),
 			Port: binary.BigEndian.Uint16(rawResponse[portOffset : portOffset+2]),
 		}
