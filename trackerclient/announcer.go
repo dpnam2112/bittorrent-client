@@ -35,7 +35,7 @@ type TrackerAnnouncer interface {
 	Events() <-chan AnnouncerEvent 
 }
 
-func NewTrackerAnnouncer(metainfo *common.TorrentMetainfo, logger slog.Logger) (TrackerAnnouncer, error) {
+func NewTrackerAnnouncer(ctx context.Context, metainfo *common.TorrentMetainfo, logger slog.Logger) (TrackerAnnouncer, error) {
 	announcer := trackerAnnouncerImpl{
 		logger: logger,
 		announcerEvents: make(chan AnnouncerEvent, 16),
@@ -48,7 +48,7 @@ func NewTrackerAnnouncer(metainfo *common.TorrentMetainfo, logger slog.Logger) (
 	}
 
 	for i, addr := range trackerAddrs {
-		trackerClient, err := NewTrackerClientFromURL(addr, logger)
+		trackerClient, err := NewTrackerClientFromURL(ctx, addr, logger)
 		if err != nil && i < len(trackerAddrs) - 1 {
 			continue
 		}

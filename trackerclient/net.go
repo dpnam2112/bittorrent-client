@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/dpnam2112/bittorrent-client/common"
@@ -27,27 +28,57 @@ type trackerUDPClient struct {
 }
 
 
-func NewTrackerUDPClient(ip net.IP, port uint16, logger slog.Logger) (TrackerClient, error) {
-	// remote address
-	raddr := net.UDPAddr{
-		Port: int(port),
-		IP:   ip,
+func NewTrackerUDPClient(ctx context.Context, ip net.IP, port uint16, logger slog.Logger) (TrackerClient, error) {
+	// Fast-fail if ctx already done
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	conn, err := net.DialUDP("udp", nil, &raddr)
+	// Build "host:port" (works for IPv4 and IPv6)
+	raddr := net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
 
+	d := net.Dialer{} // prefer ctx deadlines instead of Dialer.Timeout
+	c, err := d.DialContext(ctx, "udp", raddr)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create an UDP socket to %s: %w", raddr.IP.String(), err)
+		return nil, fmt.Errorf("dial udp %s: %w", raddr, err)
+	}
+	udpConn := c.(*net.UDPConn)
+
+	client := &trackerUDPClient{
+		ip:      ip,
+		port:    port,
+		logger:  logger,
+		udpConn: udpConn,
 	}
 
-	client := trackerUDPClient{ ip: ip, port: port, logger: logger, udpConn: conn, }
-	resp, err := client.sendConnectRequest(10 * time.Second)
+	// Optional: close socket when ctx is canceled to unblock any pending I/O
+	go func() {
+		<-ctx.Done()
+		_ = udpConn.Close()
+	}()
+
+	// Apply deadline from ctx (if any) for the initial connect handshake
+	if dl, ok := ctx.Deadline(); ok {
+		_ = udpConn.SetDeadline(dl)
+	} else {
+		// If caller didn't set a deadline, you can choose a sane default
+		_ = udpConn.SetDeadline(time.Now().Add(10 * time.Second))
+	}
+
+	defer func() {
+		// Clear deadline after handshake so future ops can set their own per-call deadlines
+		_ = udpConn.SetDeadline(time.Time{})
+	}()
+
+	// Perform tracker connect (must be context-aware internally)
+	resp, err := client.sendConnectRequest()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to UDP tracker %s: %w", raddr.IP.String(), err)
+		_ = udpConn.Close()
+		return nil, fmt.Errorf("connect to UDP tracker %s: %w", raddr, err)
 	}
 
 	client.connectionID = resp.ConnectionID
-	return &client, nil
+	return client, nil
 }
 
 
@@ -62,6 +93,7 @@ func (client *trackerUDPClient) Close() error {
 
 
 func (client *trackerUDPClient) Announce(ctx context.Context, req AnnounceRequest) (AnnounceResponse, error) {
+	// check if the passed context 
 	txnID, err := generateTxnID()
 	if err != nil {
 		return AnnounceResponse{}, fmt.Errorf("Error generating transaction ID: %w", err)
@@ -127,6 +159,10 @@ func (client *trackerUDPClient) sendAnnounceRequest(
 	}
 
 	conn.SetReadDeadline(deadline)
+	defer func() {
+		_ = conn.SetDeadline(time.Time{})
+	}()
+
 	n, _, err := conn.ReadFromUDP(responseBuf)
 
 	if err != nil {
@@ -162,12 +198,10 @@ func generateTxnID() (int32, error) {
     return int32(binary.BigEndian.Uint32(b[:])), nil
 }
 
-func (client *trackerUDPClient) sendConnectRequest(readTimeout time.Duration) (*TrackerUDPConnectResponse, error) {
+func (client *trackerUDPClient) sendConnectRequest() (*TrackerUDPConnectResponse, error) {
+	// Generate a UDP connection request with transaction ID randomly generated.
 	conn := client.udpConn
 
-	conn.SetReadDeadline(time.Now().Add(readTimeout * time.Second))
-
-	// Generate a UDP connection request with transaction ID randomly generated.
 	connectRequest := CreateTrackerUDPConnectRequest(true)
 	rawConnectRequest := connectRequest.Marshal()
 
@@ -213,7 +247,7 @@ func (client *trackerUDPClient) sendConnectRequest(readTimeout time.Duration) (*
 }
 
 
-func NewTrackerClientFromURL(url string, logger slog.Logger) (TrackerClient, error) {
+func NewTrackerClientFromURL(ctx context.Context, url string, logger slog.Logger) (TrackerClient, error) {
 	host, port, scheme, err := parseTrackerURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("In peer_resolver.createTrackerClientFromURL, error when parsing URL: %w", err)
@@ -229,7 +263,7 @@ func NewTrackerClientFromURL(url string, logger slog.Logger) (TrackerClient, err
 		return nil, fmt.Errorf("In peer_resolver.createTrackerClientFromURL, error when resolving host to IPs: %w", err)
 	}
 
-	tracker, err := NewTrackerUDPClient(ips[0], uint16(port), logger)
+	tracker, err := NewTrackerUDPClient(ctx, ips[0], uint16(port), logger)
 	if err != nil {
 		return nil, fmt.Errorf("In peer_resolver.createTrackerClientFromURL, error when creating a tracker: %w", err)
 	}

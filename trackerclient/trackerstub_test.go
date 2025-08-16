@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
+// udpTrackerStub: minimal in-process UDP tracker that speaks connect + announce.
+// Options let you flip error/txn-mismatch without changing tests.
 type udpTrackerStub struct {
-	conn     *net.UDPConn
-	addr     *net.UDPAddr
-	interval uint32
-	peers    []struct{ IP net.IP; Port uint16 }
-	// behavior toggles
+	conn          *net.UDPConn
+	addr          *net.UDPAddr
+	interval      uint32
 	forceError    bool
 	mismatchTxnID bool
 }
@@ -22,29 +22,20 @@ func newUDPTrackerStub(t *testing.T, intervalSec uint32, opts ...func(*udpTracke
 
 	la, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil { t.Fatalf("resolve: %v", err) }
-	c, err := net.ListenUDP("udp", la)
+	conn, err := net.ListenUDP("udp", la)
 	if err != nil { t.Fatalf("listen: %v", err) }
 
-	s := &udpTrackerStub{
-		conn:     c,
-		addr:     c.LocalAddr().(*net.UDPAddr),
-		interval: intervalSec,
-		peers: []struct{ IP net.IP; Port uint16 }{
-			{net.IPv4(10,0,0,1), 6881},
-			{net.IPv4(10,0,0,2), 6881},
-		},
-	}
+	s := &udpTrackerStub{conn: conn, addr: conn.LocalAddr().(*net.UDPAddr), interval: intervalSec}
 	for _, o := range opts { o(s) }
 
 	go s.serve(t)
-	t.Cleanup(s.close)
+	t.Cleanup(func() { _ = s.conn.Close() })
 	return s
 }
+
 func withError() func(*udpTrackerStub)       { return func(s *udpTrackerStub) { s.forceError = true } }
 func withTxnMismatch() func(*udpTrackerStub) { return func(s *udpTrackerStub) { s.mismatchTxnID = true } }
-
-func (s *udpTrackerStub) URL() string { return fmt.Sprintf("udp://%s", s.addr.String()) }
-func (s *udpTrackerStub) close()      { _ = s.conn.Close() }
+func (s *udpTrackerStub) URL() string        { return fmt.Sprintf("udp://%s", s.addr.String()) }
 
 func (s *udpTrackerStub) serve(t *testing.T) {
 	buf := make([]byte, 2048)
@@ -53,14 +44,13 @@ func (s *udpTrackerStub) serve(t *testing.T) {
 		if err != nil { return } // socket closed
 		if n < 16 { continue }
 
-		action := binary.BigEndian.Uint32(buf[8:12])
+		action := binary.BigEndian.Uint32(buf[8:12]) // request action at offset 8
 		switch action {
 		case 0: // CONNECT
 			resp := make([]byte, 16)
-			binary.BigEndian.PutUint32(resp[0:4], 0)
-			txn := binary.BigEndian.Uint32(buf[12:16])
-			binary.BigEndian.PutUint32(resp[4:8], txn)
-			binary.BigEndian.PutUint64(resp[8:16], 0x1122334455667788)
+			binary.BigEndian.PutUint32(resp[0:4], 0) // action=connect
+			binary.BigEndian.PutUint32(resp[4:8], binary.BigEndian.Uint32(buf[12:16])) // echo txn
+			binary.BigEndian.PutUint64(resp[8:16], 0x1122334455667788)                  // connection id
 			_, _ = s.conn.WriteToUDP(resp, raddr)
 
 		case 1: // ANNOUNCE
@@ -73,28 +63,25 @@ func (s *udpTrackerStub) serve(t *testing.T) {
 				_, _ = s.conn.WriteToUDP(resp, raddr)
 				continue
 			}
-
-			peers := s.peers
-			resp := make([]byte, 20+6*len(peers))
-			binary.BigEndian.PutUint32(resp[0:4], 1) // announce
-
 			txn := binary.BigEndian.Uint32(buf[12:16])
 			if s.mismatchTxnID { txn ^= 0xdeadbeef }
-			binary.BigEndian.PutUint32(resp[4:8], txn)
 
+			// action(4) + txn(4) + interval(4) + leechers(4) + seeders(4) + 2 peers (6 each)
+			resp := make([]byte, 20+6*2)
+			binary.BigEndian.PutUint32(resp[0:4], 1)        // announce
+			binary.BigEndian.PutUint32(resp[4:8], txn)      // txn
 			binary.BigEndian.PutUint32(resp[8:12], s.interval)
-			binary.BigEndian.PutUint32(resp[12:16], 5) // leechers
-			binary.BigEndian.PutUint32(resp[16:20], uint32(len(peers))) // seeders (arbitrary)
+			binary.BigEndian.PutUint32(resp[12:16], 3)      // leechers (arbitrary)
+			binary.BigEndian.PutUint32(resp[16:20], 2)      // seeders = count
 
-			for i, p := range peers {
-				off := 20 + i*6
-				copy(resp[off:off+4], p.IP.To4())
-				binary.BigEndian.PutUint16(resp[off+4:off+6], p.Port)
-			}
+			// peer 1: 10.0.0.1:6881
+			copy(resp[20:24], []byte{10, 0, 0, 1})
+			binary.BigEndian.PutUint16(resp[24:26], 6881)
+			// peer 2: 10.0.0.2:6881
+			copy(resp[26:30], []byte{10, 0, 0, 2})
+			binary.BigEndian.PutUint16(resp[30:32], 6881)
+
 			_, _ = s.conn.WriteToUDP(resp, raddr)
-
-		default:
-			// no-op
 		}
 	}
 }
